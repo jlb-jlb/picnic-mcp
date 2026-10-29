@@ -168,6 +168,31 @@ class PicnicClient:
         """Delete a user-defined recipe. Picnic's own recipes cannot be deleted this way."""
         return self._post("/pages/task/delete-user-defined-sellable", {"payload": {"sellable_id": str(recipe_id)}})
 
+    def search_recipes(self, term: str):
+        # Recipe search is the normal search endpoint with is_recipe=true.
+        query = urllib.parse.urlencode({"is_recipe": "true", "search_term": term})
+        return self._get("/pages/search-page-results?" + query)
+
+    def get_recipe_page(self, recipe_id: str):
+        return self._get("/pages/selling-group-details-page?selling_group_id=" + urllib.parse.quote(str(recipe_id), safe=""))
+
+    def get_recipe_title(self, recipe_id: str):
+        # A small page, much cheaper than the full details page, that holds just the title.
+        return self._get("/pages/selling-group-title-section?selling_group_id=" + urllib.parse.quote(str(recipe_id), safe=""))
+
+    def add_recipe_to_cart(self, recipe_id: str, portions: int, ingredient_ids):
+        """Put the selected ingredients of a recipe in the cart. day_offset is null outside the meal planner."""
+        payload = {
+            "day_offset": None,
+            "portions": int(portions),
+            "selected_components_ids": list(ingredient_ids),
+            "selling_group_id": str(recipe_id),
+        }
+        return self._post("/pages/task/assign-selling-group-to-basket", {"payload": payload})
+
+    def remove_recipe_from_cart(self, recipe_id: str):
+        return self._post("/pages/task/remove-selling-group-from-basket", {"payload": {"selling_group_id": str(recipe_id)}})
+
     def get_delivery_slots(self):
         return self._get("/cart/delivery_slots")
 
@@ -224,6 +249,130 @@ def flatten_search(payload, limit: int = 10):
 
     walk(payload)
     return out
+
+
+_RECIPE_LINK = re.compile(r"selling_group_id=([0-9a-f]{24,32})")
+_COLOUR_MARKUP = re.compile(r"#\([^)]*\)")
+_DURATION = re.compile(r"\d.*(Minute|Stunde|Min\.|Std)")
+# Ingredient entries sit in an analytics context, serialised inside a string in the page.
+_INGREDIENT = re.compile(
+    r'\{"checked": (true|false), "ingredient_id": "([\w-]+)", "quantity": (\d+), '
+    r'"selling_unit_id": "(\w+)", "status": "(\w+)"'
+)
+_AMOUNT_LINE = re.compile(r'"markdown": "\*\*([^*"]+)\*\* ([^"]+)"')
+_NUTRITION_ROW = re.compile(r'"accessibilityLabel": "([^",]{2,60}), ([^"]{1,30})"')
+
+
+def _plain(text: str) -> str:
+    return _COLOUR_MARKUP.sub("", text).replace(" ", " ").strip()
+
+
+def _markdowns(node, out=None):
+    """Every "markdown" text in a layout subtree, in document order."""
+    out = [] if out is None else out
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "markdown" and isinstance(value, str):
+                out.append(value)
+            else:
+                _markdowns(value, out)
+    elif isinstance(node, list):
+        for item in node:
+            _markdowns(item, out)
+    return out
+
+
+def flatten_recipe_search(payload, limit: int = 10):
+    """Reduce a recipe search page to recipe tiles with id, name, duration and labels."""
+    out = []
+    seen = set()
+
+    def walk(node):
+        if len(out) >= limit:
+            return
+        if isinstance(node, dict):
+            if str(node.get("id", "")).startswith("core-wide-recipe-tile__"):
+                link = _RECIPE_LINK.search(json.dumps(node, ensure_ascii=False))
+                if link and link.group(1) not in seen:
+                    seen.add(link.group(1))
+                    raw = _markdowns(node)
+                    labels = [_plain(t) for t in raw if t.startswith("#(#ffffff)")]
+                    rest = [_plain(t) for t in raw if not t.startswith("#(#ffffff)") and _plain(t)]
+                    duration = next((t for t in rest if _DURATION.search(t)), None)
+                    names = [t for t in rest if t != duration]
+                    out.append(
+                        {
+                            "id": link.group(1),
+                            "name": names[0] if names else None,
+                            "duration": duration,
+                            "labels": labels + names[1:],
+                        }
+                    )
+                return
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(payload)
+    return out
+
+
+def parse_recipe(page, title_page=None):
+    """Reduce a recipe details page to name, ingredients, amounts and nutrition per portion."""
+    flat = json.dumps(page, ensure_ascii=False).replace('\\"', '"')
+    tile_names = {}
+
+    def walk(node):
+        if isinstance(node, dict):
+            node_id = str(node.get("id", ""))
+            if node_id.startswith("core-wide-selling-unit-tile-"):
+                tile_names[node_id[len("core-wide-selling-unit-tile-"):]] = " ".join(
+                    t for t in (_plain(m) for m in _markdowns(node)) if t
+                )
+                return
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(page)
+    ingredients = []
+    seen = set()
+    for checked, ingredient_id, quantity, selling_unit_id, status in _INGREDIENT.findall(flat):
+        if ingredient_id in seen:
+            continue
+        seen.add(ingredient_id)
+        ingredients.append(
+            {
+                "ingredient_id": ingredient_id,
+                "selling_unit_id": selling_unit_id,
+                "quantity": int(quantity),
+                "product": tile_names.get(ingredient_id),
+                "selected": checked == "true" and status == "ACTIVE",
+            }
+        )
+    amounts = []
+    for name, amount in _AMOUNT_LINE.findall(flat):
+        if not name.endswith(":") and (name, _plain(amount)) not in amounts:
+            amounts.append((name, _plain(amount)))
+    start = flat.find("hrwerte")
+    nutrition = {}
+    if start >= 0:
+        for label, value in _NUTRITION_ROW.findall(flat[start : start + 12000]):
+            if any(ch.isdigit() for ch in value) and label not in nutrition:
+                nutrition[label] = value
+    name = None
+    if title_page is not None:
+        name = next((t for t in (_plain(m) for m in _markdowns(title_page)) if t and "Eigenes Rezept" not in t), None)
+    return {
+        "name": name,
+        "ingredients": ingredients,
+        "amounts": [{"ingredient": n, "amount": a} for n, a in amounts],
+        "nutrition_per_portion": nutrition,
+    }
 
 
 def summarize_cart(cart):

@@ -8,7 +8,9 @@ from picnic_mcp.client import (
     PicnicAuthError,
     PicnicClient,
     PicnicError,
+    flatten_recipe_search,
     flatten_search,
+    parse_recipe,
     summarize_cart,
 )
 
@@ -159,6 +161,31 @@ class ClientTests(unittest.TestCase):
         self.assertTrue(req.full_url.endswith("/api/15/pages/task/delete-user-defined-sellable"))
         self.assertEqual(json.loads(req.data), {"payload": {"sellable_id": "abc"}})
 
+    def test_recipe_search_and_pages_use_the_expected_paths(self):
+        op = FakeOpener(FakeResponse({}), FakeResponse({}), FakeResponse({}))
+        c = PicnicClient(opener=op)
+        c.search_recipes("pasta & co")
+        c.get_recipe_page("abc123")
+        c.get_recipe_title("abc123")
+        urls = [r.full_url.split("/api/15")[1] for r in op.requests]
+        self.assertEqual(urls[0], "/pages/search-page-results?is_recipe=true&search_term=pasta+%26+co")
+        self.assertEqual(urls[1], "/pages/selling-group-details-page?selling_group_id=abc123")
+        self.assertEqual(urls[2], "/pages/selling-group-title-section?selling_group_id=abc123")
+
+    def test_add_and_remove_recipe_post_the_task_payloads(self):
+        op = FakeOpener(FakeResponse({}), FakeResponse({}))
+        c = PicnicClient(opener=op)
+        c.add_recipe_to_cart("abc123", 3, ["i1", "i2"])
+        c.remove_recipe_from_cart("abc123")
+        self.assertTrue(op.requests[0].full_url.endswith("/pages/task/assign-selling-group-to-basket"))
+        self.assertEqual(
+            json.loads(op.requests[0].data),
+            {"payload": {"day_offset": None, "portions": 3, "selected_components_ids": ["i1", "i2"],
+                         "selling_group_id": "abc123"}},
+        )
+        self.assertTrue(op.requests[1].full_url.endswith("/pages/task/remove-selling-group-from-basket"))
+        self.assertEqual(json.loads(op.requests[1].data), {"payload": {"selling_group_id": "abc123"}})
+
     def test_country_selects_host_and_rejects_unknown(self):
         op = FakeOpener(FakeResponse({}))
         PicnicClient(country="DE", opener=op).get_cart()
@@ -210,6 +237,58 @@ class HelperTests(unittest.TestCase):
         self.assertEqual(flatten_search({"body": {"child": {"type": "TEXT"}}}), [])
         self.assertEqual(flatten_search([]), [])
         self.assertEqual(flatten_search({"error": {"code": "X"}}), [])
+
+    @staticmethod
+    def recipe_tile(n, group_id, *texts):
+        children = [{"markdown": t} for t in texts]
+        return {"id": f"core-wide-recipe-tile__{n}", "pml": {"component": {"children": children},
+                                                          "onPress": {"target": f"app.picnic://store/page;id=selling-group-details-page,selling_group_id={group_id}"}}}
+
+    def test_flatten_recipe_search_reads_name_duration_and_labels(self):
+        page = {"body": {"children": [
+            self.recipe_tile(1, "666222e556c0d0549db6a4a2", "#(#ffffff)Vegan#(#ffffff)", "Pasta Primavera",
+                             "#(#333333)30 Minuten#(#333333)"),
+            self.recipe_tile(2, "666222e556c0d0549db6a4a2", "Duplicate", "5 Minuten"),
+            self.recipe_tile(3, "67cb0644dcfa7e4782444ac1", "Linsensuppe", "#(#333333)1 Stunde 15 Minuten#(#333333)"),
+            {"id": "other-tile", "x": 1},
+        ]}}
+        out = flatten_recipe_search(page)
+        self.assertEqual([r["id"] for r in out], ["666222e556c0d0549db6a4a2", "67cb0644dcfa7e4782444ac1"])
+        self.assertEqual(out[0], {"id": "666222e556c0d0549db6a4a2", "name": "Pasta Primavera",
+                                  "duration": "30 Minuten", "labels": ["Vegan"]})
+        self.assertEqual(out[1]["duration"], "1 Stunde 15 Minuten")
+        self.assertEqual(len(flatten_recipe_search(page, limit=1)), 1)
+        self.assertEqual(flatten_recipe_search({"body": {}}), [])
+
+    def test_parse_recipe_reads_ingredients_amounts_and_nutrition(self):
+        context = json.dumps({"ingredients": [
+            {"checked": True, "ingredient_id": "i-1", "quantity": 1, "selling_unit_id": "s1", "status": "ACTIVE", "swap_type": None},
+            {"checked": False, "ingredient_id": "i-2", "quantity": 2, "selling_unit_id": "s2", "status": "ACTIVE", "swap_type": None},
+            {"checked": True, "ingredient_id": "i-3", "quantity": 1, "selling_unit_id": "s3", "status": "UNAVAILABLE", "swap_type": None},
+            {"checked": True, "ingredient_id": "i-1", "quantity": 1, "selling_unit_id": "s1", "status": "ACTIVE", "swap_type": None},
+        ]})
+        page = {
+            "analytics": context,
+            "tiles": [{"id": "core-wide-selling-unit-tile-i-1", "c": [{"markdown": "#(#333333)Mutti #(#333333)"}, {"markdown": "Passata "}]}],
+            "amounts": [{"markdown": "**Tagliatelle** 225 g"}, {"markdown": "**Du benötigst:** Pfanne"},
+                        {"markdown": "**Allergene**"}],
+            "nutrition": [{"markdown": "**Nährwerte**"},
+                          {"accessibilityLabel": "Tabelle mit 9 Zeilen und 2 Spalten, 1 Portion des Originalrezepts enthält ungefähr:"},
+                          {"accessibilityLabel": "Brennwert, 3.407 kJ"}, {"accessibilityLabel": "Eiweiß, 39,1g"},
+                          {"accessibilityLabel": "Hinweis, ohne Zahl"}],
+        }
+        recipe = parse_recipe(page, {"x": [{"markdown": "#(#295813)Eigenes Rezept#(#295813)"}, {"markdown": "Pasta"}]})
+        self.assertEqual(recipe["name"], "Pasta")
+        self.assertEqual([(i["ingredient_id"], i["selected"]) for i in recipe["ingredients"]],
+                         [("i-1", True), ("i-2", False), ("i-3", False)])
+        self.assertEqual(recipe["ingredients"][0]["product"], "Mutti Passata")
+        self.assertEqual(recipe["ingredients"][1]["quantity"], 2)
+        self.assertEqual(recipe["amounts"], [{"ingredient": "Tagliatelle", "amount": "225 g"}])
+        self.assertEqual(recipe["nutrition_per_portion"], {"Brennwert": "3.407 kJ", "Eiweiß": "39,1g"})
+
+    def test_parse_recipe_tolerates_an_empty_page(self):
+        recipe = parse_recipe({})
+        self.assertEqual((recipe["name"], recipe["ingredients"], recipe["nutrition_per_portion"]), (None, [], {}))
 
     def test_summarize_cart_extracts_quantity_and_total(self):
         cart = {

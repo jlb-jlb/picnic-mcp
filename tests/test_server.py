@@ -50,7 +50,8 @@ class FakeClient:
     def get_recipe_page(self, recipe_id):
         self.calls.append(("page", recipe_id))
         rows = [{"checked": True, "ingredient_id": "i-1", "quantity": 1, "selling_unit_id": "s1", "status": "ACTIVE", "swap_type": None},
-                {"checked": True, "ingredient_id": "i-2", "quantity": 1, "selling_unit_id": "s2", "status": "ACTIVE", "swap_type": None}]
+                {"checked": True, "ingredient_id": "i-2", "quantity": 1, "selling_unit_id": "s2", "status": "ACTIVE", "swap_type": None},
+                {"checked": False, "ingredient_id": "i-3", "quantity": 1, "selling_unit_id": "s3", "status": "ACTIVE", "swap_type": None}]
         return {"analytics": json.dumps({"ingredients": rows})}
 
     def get_recipe_title(self, recipe_id):
@@ -189,7 +190,8 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(found[0]["name"], "Linsensuppe")
         recipe = json.loads(call("get_recipe", {"recipe_id": self.RID})["result"]["content"][0]["text"])
         self.assertEqual(recipe["name"], "Linsensuppe")
-        self.assertEqual([i["ingredient_id"] for i in recipe["ingredients"]], ["i-1", "i-2"])
+        self.assertEqual([(i["ingredient_id"], i["selected"]) for i in recipe["ingredients"]],
+                         [("i-1", True), ("i-2", True), ("i-3", False)])
 
     def test_add_recipe_to_cart_sends_selected_ingredients_and_returns_the_cart(self):
         r = call("add_recipe_to_cart", {"recipe_id": self.RID, "portions": 4})
@@ -202,6 +204,15 @@ class ToolTests(unittest.TestCase):
         call("add_recipe_to_cart", {"recipe_id": self.RID, "skip_ingredient_ids": ["i-1"]})
         self.assertEqual(self.fake.calls[-1], ("add_recipe", self.RID, 2, ["i-2"]))
         r = call("add_recipe_to_cart", {"recipe_id": self.RID, "skip_ingredient_ids": ["i-1", "i-2"]})
+        self.assertTrue(r["result"]["isError"])
+
+    def test_add_recipe_to_cart_can_include_unselected_ingredients(self):
+        # i-3 is a pantry item the app does not select by default.
+        call("add_recipe_to_cart", {"recipe_id": self.RID, "include_ingredient_ids": ["i-3"]})
+        self.assertEqual(self.fake.calls[-1], ("add_recipe", self.RID, 2, ["i-1", "i-2", "i-3"]))
+        r = call("add_recipe_to_cart", {"recipe_id": self.RID, "include_ingredient_ids": ["nope"]})
+        self.assertTrue(r["result"]["isError"])
+        r = call("add_recipe_to_cart", {"recipe_id": self.RID, "include_ingredient_ids": "i-3"})
         self.assertTrue(r["result"]["isError"])
 
     def test_remove_recipe_from_cart_falls_back_to_the_cart(self):

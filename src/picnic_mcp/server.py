@@ -173,9 +173,20 @@ def tool_add_recipe_to_cart(args):
     skip = args.get("skip_ingredient_ids", [])
     if not isinstance(skip, list) or not all(isinstance(s, str) for s in skip):
         raise ValueError("skip_ingredient_ids must be a list of ingredient ids from get_recipe")
+    include = args.get("include_ingredient_ids", [])
+    if not isinstance(include, list) or not all(isinstance(s, str) for s in include):
+        raise ValueError("include_ingredient_ids must be a list of ingredient ids from get_recipe")
     client = get_client()
     recipe = parse_recipe(client.get_recipe_page(recipe_id))
-    chosen = [i["ingredient_id"] for i in recipe["ingredients"] if i["selected"] and i["ingredient_id"] not in skip]
+    known = {i["ingredient_id"] for i in recipe["ingredients"]}
+    unknown = [s for s in include if s not in known]
+    if unknown:
+        raise ValueError(f"unknown ingredient ids for this recipe: {unknown}")
+    chosen = [
+        i["ingredient_id"]
+        for i in recipe["ingredients"]
+        if (i["selected"] or i["ingredient_id"] in include) and i["ingredient_id"] not in skip
+    ]
     if not chosen:
         raise ValueError("this recipe has no ingredients to add")
     client.add_recipe_to_cart(recipe_id, portions, chosen)
@@ -233,19 +244,22 @@ TOOLS = {
     "get_recipe": (
         "Show a recipe: name, ingredients with the Picnic product each maps to, amounts, and nutrition per "
         "portion (energy, fat, carbohydrates, sugar, protein, salt, fibre). 'selected' marks the ingredients the "
-        "app would add to the cart by default.",
+        "dish needs, which the app adds by default. Unselected ones are pantry staples (salt, pepper, oil, onion, "
+        "garlic) or alternative variants of another ingredient, which the user probably has at home.",
         {"type": "object", "properties": {"recipe_id": _RECIPE}, "required": ["recipe_id"]},
         tool_get_recipe,
     ),
     "add_recipe_to_cart": (
-        "Add a recipe's ingredients to the cart, like the app's 'add all' button. Use skip_ingredient_ids "
-        "(from get_recipe) for things the user already has. Does not place an order.",
+        "Add a recipe's needed ingredients to the cart, like the app's 'add all' button. Pantry staples and "
+        "alternative variants are left out by default. Use include_ingredient_ids (from get_recipe) to add ones "
+        "the user lacks, and skip_ingredient_ids to leave out needed ones the user already has. Does not place an order.",
         {
             "type": "object",
             "properties": {
                 "recipe_id": _RECIPE,
                 "portions": {"type": "integer", "minimum": 1, "maximum": MAX_PORTIONS, "default": 2},
                 "skip_ingredient_ids": {"type": "array", "items": {"type": "string"}},
+                "include_ingredient_ids": {"type": "array", "items": {"type": "string"}},
             },
             "required": ["recipe_id"],
         },

@@ -122,11 +122,18 @@ class ToolTests(unittest.TestCase):
 
 
 class AuthTests(unittest.TestCase):
-    def test_missing_credentials_reported_as_tool_error(self):
-        with mock.patch.object(server, "_client", None), mock.patch.dict("os.environ", {}, clear=True):
+    def test_missing_session_points_to_the_login_command(self):
+        env = {"PICNIC_TOKEN_FILE": "does-not-exist.json"}
+        with mock.patch.object(server, "_client", None), mock.patch.dict("os.environ", env, clear=True):
             r = call("get_cart", {})
         self.assertTrue(r["result"]["isError"])
-        self.assertIn("PICNIC_USER", r["result"]["content"][0]["text"])
+        self.assertIn("picnic-mcp login", r["result"]["content"][0]["text"])
+
+    def test_stored_token_creates_the_client(self):
+        with mock.patch.object(server, "_client", None), \
+                mock.patch.object(server, "load_token", return_value="saved"):
+            client = server.get_client()
+        self.assertEqual(client.token, "saved")
 
     def test_auth_failure_is_labelled(self):
         with mock.patch.object(server, "get_client", side_effect=PicnicAuthError("bad")):

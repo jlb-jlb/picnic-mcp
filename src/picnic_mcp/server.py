@@ -1,8 +1,9 @@
 """Minimal MCP server over stdio, standard library only.
 
 Transport is newline-delimited JSON-RPC 2.0 on stdin/stdout. Only stdout carries
-protocol messages, diagnostics go to stderr. Credentials are read from the
-environment (PICNIC_USER, PICNIC_PASSWORD, PICNIC_COUNTRY) and never logged.
+protocol messages, diagnostics go to stderr. The session comes from the token that
+`picnic-mcp login` stores (country from PICNIC_COUNTRY). The password is never
+needed by the server and nothing secret is logged.
 
 There is intentionally no checkout tool. The server fills the cart and the user
 confirms the order in the Picnic app.
@@ -12,6 +13,7 @@ import json
 import os
 import sys
 
+from .auth import load_token, login_main
 from .client import PicnicAuthError, PicnicClient, PicnicError, flatten_search, summarize_cart
 
 PROTOCOL_VERSION = "2025-06-18"
@@ -22,16 +24,18 @@ _client = None
 
 
 def get_client() -> PicnicClient:
-    """Create the shared client on first use and log in from the environment."""
+    """Create the shared client on first use, preferably from the stored session token."""
     global _client
     if _client is None:
-        user = os.environ.get("PICNIC_USER")
-        password = os.environ.get("PICNIC_PASSWORD")
-        if not user or not password:
-            raise PicnicAuthError("set PICNIC_USER and PICNIC_PASSWORD in the server environment")
-        client = PicnicClient(country=os.environ.get("PICNIC_COUNTRY", "nl"))
-        client.login(user, password)
-        _client = client
+        country = os.environ.get("PICNIC_COUNTRY", "nl")
+        token = load_token(country)
+        if token:
+            _client = PicnicClient(country=country, token=token)
+            return _client
+        raise PicnicAuthError(
+            "no stored session for this country, run `picnic-mcp login` once in a terminal "
+            "(Picnic requires a two-factor code)"
+        )
     return _client
 
 
@@ -189,6 +193,8 @@ def serve(stdin=None, stdout=None):
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["login"]:
+        sys.exit(login_main())
     print("picnic-mcp ready on stdio", file=sys.stderr)
     serve()
 

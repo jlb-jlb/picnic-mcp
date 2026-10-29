@@ -4,9 +4,9 @@ An MCP server that lets Claude search Picnic groceries and fill your cart. It us
 
 ## Status
 
-Unit tests cover the client and the protocol layer offline. A first live test connected and logged in. Search was initially broken because it used a retired endpoint and is fixed in the current version, which has not been confirmed live yet, nor has adding to the cart with the new article ids. Picnic has no public API, so the endpoints come from reading the public source of the maintained unofficial `python-picnic-api2` project as a reference (nothing is imported from it). Check its `src/python_picnic_api2` folder first when an endpoint stops working. Picnic can change or block this API at any time, and using it may violate their terms of service. Use it for personal use only.
+Confirmed live against the German server: two-factor login, search, and adding and removing a cart item. Picnic has no public API, so the endpoints come from reading the public source of the maintained unofficial `python-picnic-api2` project as a reference (nothing is imported from it). Check its `src/python_picnic_api2` folder first when an endpoint stops working. Picnic can change or block this API at any time, and using it may violate their terms of service. Use it for personal use only.
 
-If your account uses two-factor login, `login` raises an auth error saying no token was returned. Two-factor support is not implemented.
+Accounts with two-factor login (the German one is) get HTTP 403 `TWO_FACTOR_AUTHENTICATION_REQUIRED` on everything except login until a code is verified. Run `picnic-mcp login` once to do that.
 
 ## Tools
 
@@ -26,21 +26,22 @@ There is no checkout tool on purpose. The server fills the cart and you confirm 
 
 Requires [uv](https://docs.astral.sh/uv/). Python 3.14 is pinned in `.python-version` and uv fetches it automatically.
 
-Credentials come from environment variables and are never written to disk or logged:
+Log in once in a terminal. It asks for the password with hidden input, has Picnic send a code by SMS or e-mail, and stores the session token in `%LOCALAPPDATA%\picnic-mcp\token-<country>.json` (override with `PICNIC_TOKEN_FILE`). The server uses only that token and never sees the password. Treat the file like a password. Log in again if it stops working.
+
+```bash
+uv run --directory C:\Users\josch\Projects\picnic-mcp picnic-mcp login
+```
 
 | Variable | Meaning |
 |---|---|
-| `PICNIC_USER` | Your Picnic account email |
-| `PICNIC_PASSWORD` | Your Picnic password |
-| `PICNIC_COUNTRY` | `nl` (default), `de`, `be` or `fr` |
+| `PICNIC_COUNTRY` | `nl` (default), `de`, `be` or `fr`. Must match for `login` and for the server. |
+| `PICNIC_USER`, `PICNIC_PASSWORD` | Optional, only read by `login` to skip the prompts. |
 
 Register the server with Claude Code (adjust the path and country):
 
 ```bash
-claude mcp add picnic --env PICNIC_COUNTRY=de --env PICNIC_USER=you@example.com --env PICNIC_PASSWORD=yourpassword -- uv run --directory C:\Users\josch\Projects\picnic-mcp picnic-mcp
+claude mcp add picnic --env PICNIC_COUNTRY=de -- uv run --directory C:\Users\josch\Projects\picnic-mcp picnic-mcp
 ```
-
-Passing the password on the command line stores it in Claude's MCP config. If you prefer, set the variables in your shell profile or a secrets manager and leave out the `--env` flags for them.
 
 ## Development
 
@@ -51,11 +52,11 @@ uv run python -m unittest discover -s tests
 Layout:
 
 - `src/picnic_mcp/client.py`: HTTP client (`urllib`), login, search, cart, deliveries, plus helpers that shrink responses for the model.
+- `src/picnic_mcp/auth.py`: `picnic-mcp login` (two-factor flow) and the session token store.
 - `src/picnic_mcp/server.py`: JSON-RPC 2.0 over stdio, tool registry and argument validation.
 - `tests/`: offline tests with a fake network layer and a fake client.
 
 ## Ideas for later
 
-- Two-factor login.
 - Nutrition lookup via Open Food Facts for healthy meal planning.
 - A `plan_week` MCP prompt that turns dietary goals and past orders into a cart.

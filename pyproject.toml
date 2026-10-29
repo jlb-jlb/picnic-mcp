@@ -1,0 +1,17 @@
+[project]
+name = "picnic-mcp"
+version = "0.1.0"
+description = "MCP server for Picnic groceries, built on the Python standard library only."
+readme = "README.md"
+authors = [
+    { name = "jlb-jlb", email = "picnic-mcp@joschabisping.de" }
+]
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+picnic-mcp = "picnic_mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.11.27,<0.12.0"]
+build-backend = "uv_build"

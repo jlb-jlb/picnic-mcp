@@ -32,6 +32,16 @@ class PicnicAuthError(PicnicError):
     """Login failed or the session token is no longer valid."""
 
 
+_HIDDEN_HEADERS = {AUTH_HEADER, "set-cookie", "cookie", "authorization"}
+
+
+def _safe_headers(headers) -> dict:
+    """Response headers for error messages, without anything auth-related."""
+    if not headers:
+        return {}
+    return {k.lower(): v for k, v in headers.items() if k.lower() not in _HIDDEN_HEADERS}
+
+
 class PicnicClient:
     def __init__(self, country: str = "nl", timeout: float = 20.0, opener=None):
         country = country.lower()
@@ -70,10 +80,10 @@ class PicnicClient:
                 raw = resp.read()
         except urllib.error.HTTPError as e:
             raw = e.read()
-            token = None
+            detail = f"HTTP {e.code} on {method} {path.split('?')[0]}: {raw[:200]!r} headers={_safe_headers(e.headers)}"
             if e.code in (401, 403):
-                raise PicnicAuthError(f"HTTP {e.code}: {raw[:200]!r}") from e
-            raise PicnicError(f"HTTP {e.code}: {raw[:200]!r}") from e
+                raise PicnicAuthError(detail) from e
+            raise PicnicError(detail) from e
         except urllib.error.URLError as e:
             raise PicnicError(f"network error: {e.reason}") from e
         if token:

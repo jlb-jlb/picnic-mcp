@@ -86,6 +86,22 @@ class ClientTests(unittest.TestCase):
             c.get_cart()
         self.assertNotIsInstance(ctx.exception, PicnicAuthError)
 
+    def test_http_errors_name_the_endpoint_and_show_safe_headers_only(self):
+        err = urllib.error.HTTPError(
+            "http://x", 403, "forbidden",
+            {"Server": "CloudFront", "X-Cache": "Error from cloudfront", "x-picnic-auth": "secret-token",
+             "Set-Cookie": "session=abc"},
+            io.BytesIO(b""),
+        )
+        c = PicnicClient(opener=FakeOpener(err))
+        with self.assertRaises(PicnicAuthError) as ctx:
+            c.get_cart()
+        msg = str(ctx.exception)
+        self.assertIn("HTTP 403 on GET /cart", msg)
+        self.assertIn("cloudfront", msg.lower())
+        self.assertNotIn("secret-token", msg)
+        self.assertNotIn("session=abc", msg)
+
     def test_search_term_is_url_encoded_on_the_page_endpoint(self):
         op = FakeOpener(FakeResponse([]))
         PicnicClient(opener=op).search("hähnchen & reis")

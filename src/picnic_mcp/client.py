@@ -260,6 +260,16 @@ _INGREDIENT = re.compile(
     r'"selling_unit_id": "(\w+)", "status": "(\w+)"'
 )
 _AMOUNT_LINE = re.compile(r'"markdown": "\*\*([^*"]+)\*\* ([^"]+)"')
+# The app sorts a recipe's ingredients into groups: what the dish needs, items people usually have
+# ("Bestimmt noch zuhause"), alternatives to a needed item, and pantry items ("Eigene Zutaten").
+_KINDS = {
+    "CORE": "needed",
+    "CORE_STOCKABLE": "probably_at_home",
+    "VARIATION": "alternative",
+    "CUPBOARD": "pantry",
+}
+_OWN_INGREDIENTS = re.compile(r'"markdown": "\*\*Eigene Zutaten:\*\* ([^"]+)"')
+_STEP_LABEL = re.compile(r"^Schritt \d+$")
 _NUTRITION_ROW = re.compile(r'"accessibilityLabel": "([^",]{2,60}), ([^"]{1,30})"')
 
 
@@ -319,24 +329,51 @@ def flatten_recipe_search(payload, limit: int = 10):
     return out
 
 
-def parse_recipe(page, title_page=None):
-    """Reduce a recipe details page to name, ingredients, amounts and nutrition per portion."""
-    flat = json.dumps(page, ensure_ascii=False).replace('\\"', '"')
-    tile_names = {}
+def _instruction_steps(page):
+    """The preparation steps from the instructions block, as plain sentences."""
+    blocks = []
 
-    def walk(node):
+    def find(node):
         if isinstance(node, dict):
-            node_id = str(node.get("id", ""))
-            if node_id.startswith("core-wide-selling-unit-tile-"):
-                tile_names[node_id[len("core-wide-selling-unit-tile-"):]] = " ".join(
-                    t for t in (_plain(m) for m in _markdowns(node)) if t
-                )
+            if node.get("id") == "instructions-block":
+                blocks.append(node)
                 return
             for value in node.values():
-                walk(value)
+                find(value)
         elif isinstance(node, list):
             for item in node:
-                walk(item)
+                find(item)
+
+    find(page)
+    steps = []
+    texts = _markdowns(blocks[0]) if blocks else []
+    for label, text in zip(texts, texts[1:]):
+        if _STEP_LABEL.match(label):
+            steps.append(_plain(text).replace("**", ""))
+    return steps
+
+
+def parse_recipe(page, title_page=None):
+    """Reduce a recipe details page to name, ingredients, steps, amounts and nutrition per portion."""
+    flat = json.dumps(page, ensure_ascii=False).replace('\\"', '"')
+    tile_names = {}
+    tile_groups = {}
+
+    def walk(node, group=None):
+        if isinstance(node, dict):
+            node_id = str(node.get("id", ""))
+            if node_id.startswith("sellable-components-") and node_id.endswith("-list"):
+                group = node_id[len("sellable-components-"):-len("-list")]
+            if node_id.startswith("core-wide-selling-unit-tile-"):
+                tile_id = node_id[len("core-wide-selling-unit-tile-"):]
+                tile_names[tile_id] = " ".join(t for t in (_plain(m) for m in _markdowns(node)) if t)
+                tile_groups[tile_id] = group
+                return
+            for value in node.values():
+                walk(value, group)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item, group)
 
     walk(page)
     ingredients = []
@@ -351,6 +388,7 @@ def parse_recipe(page, title_page=None):
                 "selling_unit_id": selling_unit_id,
                 "quantity": int(quantity),
                 "product": tile_names.get(ingredient_id),
+                "kind": _KINDS.get(tile_groups.get(ingredient_id)),
                 "selected": checked == "true" and status == "ACTIVE",
             }
         )
@@ -377,6 +415,8 @@ def parse_recipe(page, title_page=None):
         "description": description,
         "ingredients": ingredients,
         "amounts": [{"ingredient": n, "amount": a} for n, a in amounts],
+        "instructions": _instruction_steps(page),
+        "own_ingredients": (_OWN_INGREDIENTS.search(flat).group(1) if _OWN_INGREDIENTS.search(flat) else None),
         "nutrition_per_portion": nutrition,
     }
 

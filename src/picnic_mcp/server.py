@@ -242,16 +242,17 @@ TOOLS = {
         tool_search_recipes,
     ),
     "get_recipe": (
-        "Show a recipe: name, ingredients with the Picnic product each maps to, amounts, and nutrition per "
-        "portion (energy, fat, carbohydrates, sugar, protein, salt, fibre). 'selected' marks the ingredients the "
-        "dish needs, which the app adds by default. Unselected ones are pantry staples (salt, pepper, oil, onion, "
-        "garlic) or alternative variants of another ingredient, which the user probably has at home.",
+        "Show a recipe: name, description, preparation steps, ingredients with the Picnic product each maps to, "
+        "amounts, and nutrition per portion (energy, fat, carbohydrates, sugar, protein, salt, fibre). Each "
+        "ingredient has a kind: 'needed' (added to the cart by default), 'probably_at_home' (the app's 'Bestimmt "
+        "noch zuhause' section, such as onions), 'pantry' (oil, salt, spices, also listed in own_ingredients) or "
+        "'alternative' (a variant of a needed ingredient). Only 'needed' ones are selected by default.",
         {"type": "object", "properties": {"recipe_id": _RECIPE}, "required": ["recipe_id"]},
         tool_get_recipe,
     ),
     "add_recipe_to_cart": (
-        "Add a recipe's needed ingredients to the cart, like the app's 'add all' button. Pantry staples and "
-        "alternative variants are left out by default. Use include_ingredient_ids (from get_recipe) to add ones "
+        "Add a recipe's needed ingredients to the cart, like the app's 'add all' button. Ingredients the user "
+        "probably has at home, pantry items and alternatives are left out by default. Use include_ingredient_ids (from get_recipe) to add ones "
         "the user lacks, and skip_ingredient_ids to leave out needed ones the user already has. Does not place an order.",
         {
             "type": "object",

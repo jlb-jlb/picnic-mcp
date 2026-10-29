@@ -290,9 +290,38 @@ class HelperTests(unittest.TestCase):
         self.assertEqual(recipe["amounts"], [{"ingredient": "Tagliatelle", "amount": "225 g"}])
         self.assertEqual(recipe["nutrition_per_portion"], {"Brennwert": "3.407 kJ", "Eiweiß": "39,1g"})
 
+    def test_parse_recipe_sorts_ingredients_into_the_apps_groups_and_reads_the_steps(self):
+        rows = [
+            {"checked": True, "ingredient_id": "i-1", "quantity": 1, "selling_unit_id": "s1", "status": "ACTIVE", "swap_type": None},
+            {"checked": False, "ingredient_id": "i-2", "quantity": 1, "selling_unit_id": "s2", "status": "ACTIVE", "swap_type": None},
+            {"checked": False, "ingredient_id": "i-3", "quantity": 1, "selling_unit_id": "s3", "status": "ACTIVE", "swap_type": None},
+            {"checked": False, "ingredient_id": "i-4", "quantity": 1, "selling_unit_id": "s4", "status": "ACTIVE", "swap_type": None},
+        ]
+
+        def group(name, tile):
+            return {"id": f"sellable-components-{name}-list", "tiles": [
+                {"id": f"core-wide-selling-unit-tile-{tile}", "c": [{"markdown": tile.upper()}]}]}
+
+        page = {
+            "analytics": json.dumps({"ingredients": rows}),
+            "groups": [group("CORE", "i-1"), group("CORE_STOCKABLE", "i-2"),
+                       group("VARIATION", "i-3"), group("CUPBOARD", "i-4")],
+            "own": {"markdown": "**Eigene Zutaten:** Rapsöl, Salz"},
+            "steps": {"id": "instructions-block", "c": [
+                {"markdown": "So wird's gemacht"}, {"markdown": "2 Portionen"},
+                {"markdown": "Schritt 1"}, {"markdown": "**300 g Nudeln** kochen."},
+                {"markdown": "Schritt 2"}, {"markdown": "Servieren."}]},
+        }
+        recipe = parse_recipe(page)
+        self.assertEqual([(i["ingredient_id"], i["kind"]) for i in recipe["ingredients"]],
+                         [("i-1", "needed"), ("i-2", "probably_at_home"), ("i-3", "alternative"), ("i-4", "pantry")])
+        self.assertEqual(recipe["instructions"], ["300 g Nudeln kochen.", "Servieren."])
+        self.assertEqual(recipe["own_ingredients"], "Rapsöl, Salz")
+
     def test_parse_recipe_tolerates_an_empty_page(self):
         recipe = parse_recipe({})
         self.assertEqual((recipe["name"], recipe["ingredients"], recipe["nutrition_per_portion"]), (None, [], {}))
+        self.assertEqual((recipe["instructions"], recipe["own_ingredients"]), ([], None))
 
     def test_summarize_cart_extracts_quantity_and_total(self):
         cart = {

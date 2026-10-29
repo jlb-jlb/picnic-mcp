@@ -15,7 +15,15 @@ import re
 import sys
 
 from .auth import load_token, login_main
-from .client import PicnicAuthError, PicnicClient, PicnicError, flatten_search, summarize_cart
+from .client import (
+    PicnicAuthError,
+    PicnicClient,
+    PicnicError,
+    flatten_recipe_search,
+    flatten_search,
+    parse_recipe,
+    summarize_cart,
+)
 
 PROTOCOL_VERSION = "2025-06-18"
 SERVER_INFO = {"name": "picnic-mcp", "version": "0.1.0"}
@@ -133,7 +141,57 @@ def tool_delete_recipe(args):
     return {"deleted": recipe_id.strip()}
 
 
+def _recipe_id(args) -> str:
+    recipe_id = args.get("recipe_id")
+    if not isinstance(recipe_id, str) or not _RECIPE_ID.match(recipe_id.strip()):
+        raise ValueError("recipe_id must be a hex id from search_recipes or create_recipe")
+    return recipe_id.strip()
+
+
+def tool_search_recipes(args):
+    query = args.get("query")
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("query must be a non-empty string")
+    limit = args.get("limit", 10)
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 20:
+        raise ValueError("limit must be an integer from 1 to 20")
+    return flatten_recipe_search(get_client().search_recipes(query.strip()), limit)
+
+
+def tool_get_recipe(args):
+    recipe_id = _recipe_id(args)
+    client = get_client()
+    recipe = parse_recipe(client.get_recipe_page(recipe_id), client.get_recipe_title(recipe_id))
+    return {"id": recipe_id, **recipe}
+
+
+def tool_add_recipe_to_cart(args):
+    recipe_id = _recipe_id(args)
+    portions = args.get("portions", 2)
+    if isinstance(portions, bool) or not isinstance(portions, int) or not 1 <= portions <= MAX_PORTIONS:
+        raise ValueError(f"portions must be an integer from 1 to {MAX_PORTIONS}")
+    skip = args.get("skip_ingredient_ids", [])
+    if not isinstance(skip, list) or not all(isinstance(s, str) for s in skip):
+        raise ValueError("skip_ingredient_ids must be a list of ingredient ids from get_recipe")
+    client = get_client()
+    recipe = parse_recipe(client.get_recipe_page(recipe_id))
+    chosen = [i["ingredient_id"] for i in recipe["ingredients"] if i["selected"] and i["ingredient_id"] not in skip]
+    if not chosen:
+        raise ValueError("this recipe has no ingredients to add")
+    result = client.add_recipe_to_cart(recipe_id, portions, chosen)
+    cart = result.get("cart") if isinstance(result, dict) else None
+    return summarize_cart(cart or client.get_cart())
+
+
+def tool_remove_recipe_from_cart(args):
+    client = get_client()
+    result = client.remove_recipe_from_cart(_recipe_id(args))
+    cart = result.get("cart") if isinstance(result, dict) else None
+    return summarize_cart(cart or client.get_cart())
+
+
 _ID = {"type": "string", "description": "Picnic product id from search_products"}
+_RECIPE = {"type": "string", "description": "Recipe id from search_recipes or create_recipe"}
 _COUNT = {"type": "integer", "minimum": 1, "maximum": MAX_COUNT, "default": 1}
 
 TOOLS = {
@@ -161,6 +219,44 @@ TOOLS = {
         tool_remove_from_cart,
     ),
     "clear_cart": ("Remove every item from the cart.", {"type": "object", "properties": {}}, tool_clear_cart),
+    "search_recipes": (
+        "Search Picnic's own recipes and the user's recipes. Returns id, name, duration and labels such as 'Vegan'.",
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search term, e.g. 'linsen'"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 10},
+            },
+            "required": ["query"],
+        },
+        tool_search_recipes,
+    ),
+    "get_recipe": (
+        "Show a recipe: name, ingredients with the Picnic product each maps to, amounts, and nutrition per "
+        "portion (energy, fat, carbohydrates, sugar, protein, salt, fibre). 'selected' marks the ingredients the "
+        "app would add to the cart by default.",
+        {"type": "object", "properties": {"recipe_id": _RECIPE}, "required": ["recipe_id"]},
+        tool_get_recipe,
+    ),
+    "add_recipe_to_cart": (
+        "Add a recipe's ingredients to the cart, like the app's 'add all' button. Use skip_ingredient_ids "
+        "(from get_recipe) for things the user already has. Does not place an order.",
+        {
+            "type": "object",
+            "properties": {
+                "recipe_id": _RECIPE,
+                "portions": {"type": "integer", "minimum": 1, "maximum": MAX_PORTIONS, "default": 2},
+                "skip_ingredient_ids": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["recipe_id"],
+        },
+        tool_add_recipe_to_cart,
+    ),
+    "remove_recipe_from_cart": (
+        "Take a recipe's ingredients out of the cart again.",
+        {"type": "object", "properties": {"recipe_id": _RECIPE}, "required": ["recipe_id"]},
+        tool_remove_recipe_from_cart,
+    ),
     "create_recipe": (
         "Save a recipe of the user's own in the Picnic app ('Eigenes Rezept'), so its ingredients can be "
         "added to the cart there in one tap. Find each ingredient with search_products first and pass its id. "

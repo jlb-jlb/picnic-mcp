@@ -42,6 +42,28 @@ class FakeClient:
         self.calls.append(("delete_recipe", recipe_id))
         return {}
 
+    def search_recipes(self, term):
+        self.calls.append(("search_recipes", term))
+        return {"tiles": [{"id": "core-wide-recipe-tile__1", "t": [{"markdown": "Linsensuppe"}, {"markdown": "30 Minuten"}],
+                           "target": "x;selling_group_id=666222e556c0d0549db6a4a2"}]}
+
+    def get_recipe_page(self, recipe_id):
+        self.calls.append(("page", recipe_id))
+        rows = [{"checked": True, "ingredient_id": "i-1", "quantity": 1, "selling_unit_id": "s1", "status": "ACTIVE", "swap_type": None},
+                {"checked": True, "ingredient_id": "i-2", "quantity": 1, "selling_unit_id": "s2", "status": "ACTIVE", "swap_type": None}]
+        return {"analytics": json.dumps({"ingredients": rows})}
+
+    def get_recipe_title(self, recipe_id):
+        return {"t": [{"markdown": "Linsensuppe"}]}
+
+    def add_recipe_to_cart(self, recipe_id, portions, ingredient_ids):
+        self.calls.append(("add_recipe", recipe_id, portions, list(ingredient_ids)))
+        return {"cart": {"total_price": 500, "items": []}}
+
+    def remove_recipe_from_cart(self, recipe_id):
+        self.calls.append(("remove_recipe", recipe_id))
+        return {}
+
 
 def rpc(method, params=None, msg_id=1):
     msg = {"jsonrpc": "2.0", "method": method}
@@ -158,6 +180,44 @@ class ToolTests(unittest.TestCase):
         for bad in ["", "../cart", "s1021989", 5]:
             self.assertTrue(call("delete_recipe", {"recipe_id": bad})["result"]["isError"], bad)
         self.assertEqual(len(self.fake.calls), 1)
+
+    RID = "666222e556c0d0549db6a4a2"
+
+    def test_search_recipes_and_get_recipe(self):
+        found = json.loads(call("search_recipes", {"query": "linsen"})["result"]["content"][0]["text"])
+        self.assertEqual(found[0]["id"], self.RID)
+        self.assertEqual(found[0]["name"], "Linsensuppe")
+        recipe = json.loads(call("get_recipe", {"recipe_id": self.RID})["result"]["content"][0]["text"])
+        self.assertEqual(recipe["name"], "Linsensuppe")
+        self.assertEqual([i["ingredient_id"] for i in recipe["ingredients"]], ["i-1", "i-2"])
+
+    def test_add_recipe_to_cart_sends_selected_ingredients_and_returns_the_cart(self):
+        r = call("add_recipe_to_cart", {"recipe_id": self.RID, "portions": 4})
+        self.assertFalse(r["result"]["isError"])
+        self.assertEqual(self.fake.calls[-1], ("add_recipe", self.RID, 4, ["i-1", "i-2"]))
+        self.assertEqual(json.loads(r["result"]["content"][0]["text"])["total_price_cents"], 500)
+
+    def test_add_recipe_to_cart_can_skip_ingredients(self):
+        call("add_recipe_to_cart", {"recipe_id": self.RID, "skip_ingredient_ids": ["i-1"]})
+        self.assertEqual(self.fake.calls[-1], ("add_recipe", self.RID, 2, ["i-2"]))
+        r = call("add_recipe_to_cart", {"recipe_id": self.RID, "skip_ingredient_ids": ["i-1", "i-2"]})
+        self.assertTrue(r["result"]["isError"])
+
+    def test_remove_recipe_from_cart_falls_back_to_the_cart(self):
+        r = call("remove_recipe_from_cart", {"recipe_id": self.RID})
+        self.assertFalse(r["result"]["isError"])
+        self.assertEqual(self.fake.calls[-1], ("remove_recipe", self.RID))
+
+    def test_recipe_tools_validate_input(self):
+        for name, args in [
+            ("search_recipes", {"query": " "}), ("search_recipes", {"query": "x", "limit": 21}),
+            ("get_recipe", {"recipe_id": "../cart"}), ("get_recipe", {}),
+            ("add_recipe_to_cart", {"recipe_id": self.RID, "portions": 0}),
+            ("add_recipe_to_cart", {"recipe_id": self.RID, "skip_ingredient_ids": "i-1"}),
+            ("remove_recipe_from_cart", {"recipe_id": "s1021989"}),
+        ]:
+            self.assertTrue(call(name, args)["result"]["isError"], (name, args))
+        self.assertEqual(self.fake.calls, [])
 
     def test_unknown_tool_is_protocol_error(self):
         self.assertEqual(call("checkout", {})["error"]["code"], -32602)

@@ -43,13 +43,13 @@ def _safe_headers(headers) -> dict:
 
 
 class PicnicClient:
-    def __init__(self, country: str = "nl", timeout: float = 20.0, opener=None):
+    def __init__(self, country: str = "nl", timeout: float = 20.0, opener=None, token: str | None = None):
         country = country.lower()
         if country not in SUPPORTED_COUNTRIES:
             raise ValueError(f"country must be one of {SUPPORTED_COUNTRIES}")
         self._base = BASE_URL.format(country=country, version=API_VERSION)
         self._timeout = timeout
-        self._token = None
+        self._token = token
         # Random per-instance device id, sent as the app's x-picnic-did header.
         self._device_id = secrets.token_hex(8).upper()
         # Injectable so tests can replace the network layer.
@@ -111,6 +111,20 @@ class PicnicClient:
         if not self.authenticated:
             raise PicnicAuthError("login returned no auth token (account may require two-factor verification)")
         return result
+
+    @property
+    def token(self) -> str | None:
+        return self._token
+
+    def generate_2fa(self, channel: str = "SMS"):
+        """Ask Picnic to send a one-time code. Needed once per session on 2FA accounts."""
+        if channel not in ("SMS", "EMAIL"):
+            raise ValueError("channel must be SMS or EMAIL")
+        return self._post("/user/2fa/generate", {"channel": channel})
+
+    def verify_2fa(self, code: str):
+        """Confirm the one-time code. The session token is then fully authorised."""
+        return self._post("/user/2fa/verify", {"otp": str(code).strip()})
 
     def get_user(self):
         return self._get("/user")

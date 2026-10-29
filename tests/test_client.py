@@ -139,6 +139,26 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(json.loads(op.requests[0].data), {"product_id": "123", "count": 2})
         self.assertEqual(json.loads(op.requests[1].data), {"product_id": "123", "count": 1})
 
+    def test_create_recipe_posts_the_task_payload_the_app_sends(self):
+        op = FakeOpener(FakeResponse({"sellingGroupId": "abc"}))
+        out = PicnicClient(opener=op).create_recipe("Test", 2, {"s1": 1, "s2": 3})
+        req = op.requests[0]
+        self.assertTrue(req.full_url.endswith("/api/15/pages/task/create-user-defined-recipe"))
+        payload = json.loads(req.data)["payload"]
+        self.assertEqual(payload["name"], "Test")
+        self.assertEqual(payload["portions"], 2)
+        self.assertEqual(payload["selling_units"], ["s1", "s2"])
+        self.assertEqual(payload["selling_unit_quantities_by_id"], {"s1": 1, "s2": 3})
+        self.assertIsNone(payload["id"])
+        self.assertEqual(out["sellingGroupId"], "abc")
+
+    def test_delete_recipe_uses_the_sellable_task(self):
+        op = FakeOpener(FakeResponse({}))
+        PicnicClient(opener=op).delete_recipe("abc")
+        req = op.requests[0]
+        self.assertTrue(req.full_url.endswith("/api/15/pages/task/delete-user-defined-sellable"))
+        self.assertEqual(json.loads(req.data), {"payload": {"sellable_id": "abc"}})
+
     def test_country_selects_host_and_rejects_unknown(self):
         op = FakeOpener(FakeResponse({}))
         PicnicClient(country="DE", opener=op).get_cart()

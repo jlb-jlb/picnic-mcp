@@ -148,6 +148,26 @@ class PicnicClient:
     def clear_cart(self):
         return self._post("/cart/clear")
 
+    def create_recipe(self, name: str, portions: int, ingredients: dict):
+        """Create a user-defined recipe ("Eigenes Rezept"). Ingredients map selling-unit id to quantity.
+
+        The app posts to a "task" endpoint with the data wrapped in a payload. The response holds
+        the new recipe's id as "sellingGroupId".
+        """
+        payload = {
+            "id": None,
+            "name": name,
+            "portions": int(portions),
+            "selling_unit_quantities_by_id": {str(k): int(v) for k, v in ingredients.items()},
+            "selling_unit_sources": {},
+            "selling_units": [str(k) for k in ingredients],
+        }
+        return self._post("/pages/task/create-user-defined-recipe", {"payload": payload})
+
+    def delete_recipe(self, recipe_id: str):
+        """Delete a user-defined recipe. Picnic's own recipes cannot be deleted this way."""
+        return self._post("/pages/task/delete-user-defined-sellable", {"payload": {"sellable_id": str(recipe_id)}})
+
     def get_delivery_slots(self):
         return self._get("/cart/delivery_slots")
 

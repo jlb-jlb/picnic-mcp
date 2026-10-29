@@ -11,6 +11,7 @@ confirms the order in the Picnic app.
 
 import json
 import os
+import re
 import sys
 
 from .auth import load_token, login_main
@@ -87,6 +88,51 @@ def tool_get_order_history(args):
     return get_client().get_deliveries(["COMPLETED"])
 
 
+MAX_INGREDIENTS = 40
+MAX_PORTIONS = 20
+_RECIPE_ID = re.compile(r"^[0-9a-f]{24,32}$")
+
+
+def _ingredients(args) -> dict:
+    """Validate the ingredient list and merge duplicate products by summing quantities."""
+    items = args.get("ingredients")
+    if not isinstance(items, list) or not 1 <= len(items) <= MAX_INGREDIENTS:
+        raise ValueError(f"ingredients must be a list of 1 to {MAX_INGREDIENTS} items")
+    merged = {}
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError("each ingredient must be an object with product_id and quantity")
+        pid = _product_id(item)
+        quantity = item.get("quantity", 1)
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or not 1 <= quantity <= MAX_COUNT:
+            raise ValueError(f"quantity must be an integer from 1 to {MAX_COUNT}")
+        merged[pid] = merged.get(pid, 0) + quantity
+    return merged
+
+
+def tool_create_recipe(args):
+    name = args.get("name")
+    if not isinstance(name, str) or not name.strip() or len(name.strip()) > 80:
+        raise ValueError("name must be a non-empty string of at most 80 characters")
+    portions = args.get("portions", 2)
+    if isinstance(portions, bool) or not isinstance(portions, int) or not 1 <= portions <= MAX_PORTIONS:
+        raise ValueError(f"portions must be an integer from 1 to {MAX_PORTIONS}")
+    ingredients = _ingredients(args)
+    result = get_client().create_recipe(name.strip(), portions, ingredients)
+    recipe_id = result.get("sellingGroupId") if isinstance(result, dict) else None
+    if not recipe_id:
+        raise PicnicError("Picnic did not return a recipe id")
+    return {"recipe_id": recipe_id, "name": name.strip(), "portions": portions, "ingredient_count": len(ingredients)}
+
+
+def tool_delete_recipe(args):
+    recipe_id = args.get("recipe_id")
+    if not isinstance(recipe_id, str) or not _RECIPE_ID.match(recipe_id.strip()):
+        raise ValueError("recipe_id must be the hex id returned by create_recipe")
+    get_client().delete_recipe(recipe_id.strip())
+    return {"deleted": recipe_id.strip()}
+
+
 _ID = {"type": "string", "description": "Picnic product id from search_products"}
 _COUNT = {"type": "integer", "minimum": 1, "maximum": MAX_COUNT, "default": 1}
 
@@ -115,6 +161,39 @@ TOOLS = {
         tool_remove_from_cart,
     ),
     "clear_cart": ("Remove every item from the cart.", {"type": "object", "properties": {}}, tool_clear_cart),
+    "create_recipe": (
+        "Save a recipe of the user's own in the Picnic app ('Eigenes Rezept'), so its ingredients can be "
+        "added to the cart there in one tap. Find each ingredient with search_products first and pass its id. "
+        "Quantity is the number of packages of that product. Does not touch the cart or place an order.",
+        {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Recipe title, at most 80 characters"},
+                "portions": {"type": "integer", "minimum": 1, "maximum": MAX_PORTIONS, "default": 2},
+                "ingredients": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": MAX_INGREDIENTS,
+                    "items": {
+                        "type": "object",
+                        "properties": {"product_id": _ID, "quantity": _COUNT},
+                        "required": ["product_id"],
+                    },
+                },
+            },
+            "required": ["name", "ingredients"],
+        },
+        tool_create_recipe,
+    ),
+    "delete_recipe": (
+        "Delete a recipe the user created with create_recipe. Only for user-created recipes, never Picnic's own.",
+        {
+            "type": "object",
+            "properties": {"recipe_id": {"type": "string", "description": "Id returned by create_recipe"}},
+            "required": ["recipe_id"],
+        },
+        tool_delete_recipe,
+    ),
     "get_delivery_slots": ("List the available delivery slots for the current cart.", {"type": "object", "properties": {}}, tool_get_delivery_slots),
     "get_order_history": ("List completed deliveries, useful for learning which products the user usually buys.", {"type": "object", "properties": {}}, tool_get_order_history),
 }

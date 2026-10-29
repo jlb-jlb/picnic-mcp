@@ -34,6 +34,14 @@ class FakeClient:
     def get_cart(self):
         return {"total_price": 0, "items": []}
 
+    def create_recipe(self, name, portions, ingredients):
+        self.calls.append(("create_recipe", name, portions, ingredients))
+        return {"sellingGroupId": "5cd1376dad2843a998f6e114b078b1a9"}
+
+    def delete_recipe(self, recipe_id):
+        self.calls.append(("delete_recipe", recipe_id))
+        return {}
+
 
 def rpc(method, params=None, msg_id=1):
     msg = {"jsonrpc": "2.0", "method": method}
@@ -116,6 +124,40 @@ class ToolTests(unittest.TestCase):
             r = call(name, args)
             self.assertTrue(r["result"]["isError"], (name, args))
         self.assertEqual(self.fake.calls, [])
+
+    def test_create_recipe_merges_duplicates_and_returns_the_id(self):
+        r = call("create_recipe", {"name": " Haferbrei ", "portions": 3, "ingredients": [
+            {"product_id": "s1", "quantity": 1}, {"product_id": "s2"}, {"product_id": "s1", "quantity": 2}]})
+        self.assertFalse(r["result"]["isError"])
+        self.assertEqual(self.fake.calls[0], ("create_recipe", "Haferbrei", 3, {"s1": 3, "s2": 1}))
+        out = json.loads(r["result"]["content"][0]["text"])
+        self.assertEqual(out["recipe_id"], "5cd1376dad2843a998f6e114b078b1a9")
+        self.assertEqual(out["ingredient_count"], 2)
+
+    def test_create_recipe_validates_input_before_calling_picnic(self):
+        good = [{"product_id": "s1"}]
+        for args in [
+            {"name": "", "ingredients": good},
+            {"name": "x" * 81, "ingredients": good},
+            {"name": "x", "portions": 0, "ingredients": good},
+            {"name": "x", "portions": True, "ingredients": good},
+            {"name": "x", "ingredients": []},
+            {"name": "x", "ingredients": "s1"},
+            {"name": "x", "ingredients": ["s1"]},
+            {"name": "x", "ingredients": [{"product_id": ""}]},
+            {"name": "x", "ingredients": [{"product_id": "s1", "quantity": 0}]},
+            {"name": "x", "ingredients": [{"product_id": "s1"}] * 41},
+        ]:
+            self.assertTrue(call("create_recipe", args)["result"]["isError"], args)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_delete_recipe_accepts_only_a_hex_id(self):
+        rid = "5cd1376dad2843a998f6e114b078b1a9"
+        self.assertFalse(call("delete_recipe", {"recipe_id": rid})["result"]["isError"])
+        self.assertEqual(self.fake.calls, [("delete_recipe", rid)])
+        for bad in ["", "../cart", "s1021989", 5]:
+            self.assertTrue(call("delete_recipe", {"recipe_id": bad})["result"]["isError"], bad)
+        self.assertEqual(len(self.fake.calls), 1)
 
     def test_unknown_tool_is_protocol_error(self):
         self.assertEqual(call("checkout", {})["error"]["code"], -32602)

@@ -4,7 +4,7 @@ An MCP server that lets Claude search Picnic groceries and fill your cart. It us
 
 ## Status
 
-Unit tests cover the client and the protocol layer offline. The server has not yet been run against a real Picnic account. Picnic has no public API, so the endpoints come from reading the public source of the unofficial `python-picnic-api` project as a reference (nothing is imported from it). Picnic can change or block this API at any time, and using it may violate their terms of service. Use it for personal use only.
+Unit tests cover the client and the protocol layer offline. A first live test connected and logged in. Search was initially broken because it used a retired endpoint and is fixed in the current version, which has not been confirmed live yet, nor has adding to the cart with the new article ids. Picnic has no public API, so the endpoints come from reading the public source of the maintained unofficial `python-picnic-api2` project as a reference (nothing is imported from it). Check its `src/python_picnic_api2` folder first when an endpoint stops working. Picnic can change or block this API at any time, and using it may violate their terms of service. Use it for personal use only.
 
 If your account uses two-factor login, `login` raises an auth error saying no token was returned. Two-factor support is not implemented.
 

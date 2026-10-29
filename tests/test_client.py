@@ -102,6 +102,8 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(h1.get_header("X-picnic-agent"), "30100;1.206.1-#15408")
         self.assertRegex(h1.get_header("X-picnic-did"), r"^[0-9A-F]{16}$")
         self.assertNotEqual(h1.get_header("X-picnic-did"), h2.get_header("X-picnic-did"))
+        self.assertEqual(h1.get_header("User-agent"), "okhttp/4.9.0")
+        self.assertEqual(h1.get_header("Accept"), "*/*")
 
     def test_deliveries_use_the_summary_endpoint(self):
         op = FakeOpener(FakeResponse([]))

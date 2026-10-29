@@ -17,7 +17,8 @@ BASE_URL = "https://storefront-prod.{country}.picnicinternational.com/api/{versi
 API_VERSION = "15"
 CLIENT_ID = 30100
 AUTH_HEADER = "x-picnic-auth"
-USER_AGENT = "okhttp/3.9.0"
+# Matches the maintained python-picnic-api2 client. The older okhttp/3.9.0 got an empty 403 on login (cause unconfirmed).
+USER_AGENT = "okhttp/4.9.0"
 # The page endpoints (search, article details) only answer when these app headers are present.
 PICNIC_AGENT = "30100;1.206.1-#15408"
 SUPPORTED_COUNTRIES = ("nl", "de", "be", "fr")
@@ -53,6 +54,7 @@ class PicnicClient:
         data = None
         headers = {
             "User-Agent": USER_AGENT,
+            "Accept": "*/*",
             "Content-Type": "application/json; charset=UTF-8",
             "x-picnic-agent": PICNIC_AGENT,
             "x-picnic-did": self._device_id,

@@ -364,11 +364,17 @@ def parse_recipe(page, title_page=None):
         for label, value in _NUTRITION_ROW.findall(flat[start : start + 12000]):
             if any(ch.isdigit() for ch in value) and label not in nutrition:
                 nutrition[label] = value
-    name = None
+    # The title page lists a category tag, the title, then a description. Own recipes have only the title.
+    name = description = None
     if title_page is not None:
-        name = next((t for t in (_plain(m) for m in _markdowns(title_page)) if t and "Eigenes Rezept" not in t), None)
+        texts = [t for t in (_plain(m) for m in _markdowns(title_page)) if t and t != "Eigenes Rezept"]
+        if len(texts) >= 3:
+            name, description = texts[1], texts[2]
+        elif texts:
+            name = texts[-1]
     return {
         "name": name,
+        "description": description,
         "ingredients": ingredients,
         "amounts": [{"ingredient": n, "amount": a} for n, a in amounts],
         "nutrition_per_portion": nutrition,

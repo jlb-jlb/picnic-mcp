@@ -178,16 +178,15 @@ def tool_add_recipe_to_cart(args):
     chosen = [i["ingredient_id"] for i in recipe["ingredients"] if i["selected"] and i["ingredient_id"] not in skip]
     if not chosen:
         raise ValueError("this recipe has no ingredients to add")
-    result = client.add_recipe_to_cart(recipe_id, portions, chosen)
-    cart = result.get("cart") if isinstance(result, dict) else None
-    return summarize_cart(cart or client.get_cart())
+    client.add_recipe_to_cart(recipe_id, portions, chosen)
+    # The task response carries the cart in the app's internal state format, so read the real cart.
+    return summarize_cart(client.get_cart())
 
 
 def tool_remove_recipe_from_cart(args):
     client = get_client()
-    result = client.remove_recipe_from_cart(_recipe_id(args))
-    cart = result.get("cart") if isinstance(result, dict) else None
-    return summarize_cart(cart or client.get_cart())
+    client.remove_recipe_from_cart(_recipe_id(args))
+    return summarize_cart(client.get_cart())
 
 
 _ID = {"type": "string", "description": "Picnic product id from search_products"}

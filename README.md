@@ -4,7 +4,7 @@ An MCP server that lets Claude search Picnic groceries and fill your cart. It us
 
 ## Status
 
-Confirmed live against the German server: two-factor login, search, adding and removing a cart item, and creating and deleting your own recipe. Picnic has no public API, so the endpoints come from reading the public source of the maintained unofficial `python-picnic-api2` project as a reference (nothing is imported from it). Check its `src/python_picnic_api2` folder first when an endpoint stops working. Picnic can change or block this API at any time, and using it may violate their terms of service. Use it for personal use only.
+Confirmed live against the German server: two-factor login, search, adding and removing a cart item, creating and deleting your own recipe, and searching a recipe, reading its nutrition and adding it to the cart and removing it again. Picnic has no public API, so the endpoints come from reading the public source of the maintained unofficial `python-picnic-api2` project as a reference (nothing is imported from it). Check its `src/python_picnic_api2` folder first when an endpoint stops working. Picnic can change or block this API at any time, and using it may violate their terms of service. Use it for personal use only.
 
 Accounts with two-factor login (the German one is) get HTTP 403 `TWO_FACTOR_AUTHENTICATION_REQUIRED` on everything except login until a code is verified. Run `picnic-mcp login` once to do that.
 
@@ -17,6 +17,10 @@ Accounts with two-factor login (the German one is) get HTTP 403 `TWO_FACTOR_AUTH
 | `add_to_cart` | Add a product by id (count 1 to 50). |
 | `remove_from_cart` | Remove a quantity of a product. |
 | `clear_cart` | Empty the cart. |
+| `search_recipes` | Search Picnic's recipes and your own. Returns id, name, duration and labels such as Vegan. |
+| `get_recipe` | Show a recipe: ingredients with the product each maps to, amounts, and nutrition per portion. |
+| `add_recipe_to_cart` | Add a recipe's ingredients to the cart like the app's add-all button, with portions and optional ingredients to skip. |
+| `remove_recipe_from_cart` | Take a recipe's ingredients out of the cart again. |
 | `create_recipe` | Save your own recipe in the Picnic app ("Eigenes Rezept") from a name, portions and ingredient product ids. Does not touch the cart. |
 | `delete_recipe` | Delete a recipe you created with `create_recipe`. |
 | `get_delivery_slots` | List delivery slots for the current cart. |

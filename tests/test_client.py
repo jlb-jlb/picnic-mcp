@@ -277,8 +277,12 @@ class HelperTests(unittest.TestCase):
                           {"accessibilityLabel": "Brennwert, 3.407 kJ"}, {"accessibilityLabel": "Eiweiß, 39,1g"},
                           {"accessibilityLabel": "Hinweis, ohne Zahl"}],
         }
-        recipe = parse_recipe(page, {"x": [{"markdown": "#(#295813)Eigenes Rezept#(#295813)"}, {"markdown": "Pasta"}]})
-        self.assertEqual(recipe["name"], "Pasta")
+        own = parse_recipe(page, {"x": [{"markdown": "#(#295813)Eigenes Rezept#(#295813)"}, {"markdown": "Pasta"}]})
+        self.assertEqual((own["name"], own["description"]), ("Pasta", None))
+        picnic = parse_recipe(page, {"x": [{"markdown": "Kreative Salate"}, {"markdown": "Linsen-Salat"},
+                                           {"markdown": "Frisch und gesund."}]})
+        self.assertEqual((picnic["name"], picnic["description"]), ("Linsen-Salat", "Frisch und gesund."))
+        recipe = own
         self.assertEqual([(i["ingredient_id"], i["selected"]) for i in recipe["ingredients"]],
                          [("i-1", True), ("i-2", False), ("i-3", False)])
         self.assertEqual(recipe["ingredients"][0]["product"], "Mutti Passata")

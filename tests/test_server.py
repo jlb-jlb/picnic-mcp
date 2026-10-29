@@ -195,7 +195,8 @@ class ToolTests(unittest.TestCase):
         r = call("add_recipe_to_cart", {"recipe_id": self.RID, "portions": 4})
         self.assertFalse(r["result"]["isError"])
         self.assertEqual(self.fake.calls[-1], ("add_recipe", self.RID, 4, ["i-1", "i-2"]))
-        self.assertEqual(json.loads(r["result"]["content"][0]["text"])["total_price_cents"], 500)
+        # The cart comes from a fresh get_cart, not from the task response.
+        self.assertEqual(json.loads(r["result"]["content"][0]["text"])["total_price_cents"], 0)
 
     def test_add_recipe_to_cart_can_skip_ingredients(self):
         call("add_recipe_to_cart", {"recipe_id": self.RID, "skip_ingredient_ids": ["i-1"]})

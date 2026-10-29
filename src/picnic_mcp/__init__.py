@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from picnic-mcp!")
+"""MCP server for Picnic groceries, standard library only."""

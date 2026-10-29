@@ -13,7 +13,19 @@ class FakeClient:
 
     def search(self, term):
         self.calls.append(("search", term))
-        return [{"type": "SINGLE_ARTICLE", "id": "1", "name": "Oats", "display_price": 120}]
+        return {
+            "body": {
+                "child": {
+                    "children": [
+                        {
+                            "type": "SELLING_UNIT_TILE",
+                            "sellingUnit": {"id": "s1", "name": "Oats", "display_price": 120},
+                            "onPress": {"payload": '{"sole_article_id":"1"}'},
+                        }
+                    ]
+                }
+            }
+        }
 
     def add_product(self, pid, count):
         self.calls.append(("add", pid, count))
@@ -84,6 +96,7 @@ class ToolTests(unittest.TestCase):
         r = call("search_products", {"query": " oats "})
         self.assertFalse(r["result"]["isError"])
         self.assertEqual(self.text(r)[0]["name"], "Oats")
+        self.assertEqual(self.text(r)[0]["id"], "1")
         self.assertEqual(self.fake.calls[0], ("search", "oats"))
 
     def test_add_to_cart_passes_validated_arguments(self):

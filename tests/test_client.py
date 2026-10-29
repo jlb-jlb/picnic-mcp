@@ -86,10 +86,29 @@ class ClientTests(unittest.TestCase):
             c.get_cart()
         self.assertNotIsInstance(ctx.exception, PicnicAuthError)
 
-    def test_search_term_is_url_encoded(self):
+    def test_search_term_is_url_encoded_on_the_page_endpoint(self):
         op = FakeOpener(FakeResponse([]))
         PicnicClient(opener=op).search("hähnchen & reis")
-        self.assertIn("search_term=h%C3%A4hnchen+%26+reis", op.requests[0].full_url)
+        url = op.requests[0].full_url
+        self.assertIn("/api/15/pages/search-page-results?", url)
+        self.assertIn("search_term=h%C3%A4hnchen+%26+reis", url)
+
+    def test_app_headers_are_sent_and_device_id_is_random_per_client(self):
+        op = FakeOpener(FakeResponse({}), FakeResponse({}))
+        a, b = PicnicClient(opener=op), PicnicClient(opener=op)
+        a.get_cart()
+        b.get_cart()
+        h1, h2 = op.requests[0], op.requests[1]
+        self.assertEqual(h1.get_header("X-picnic-agent"), "30100;1.206.1-#15408")
+        self.assertRegex(h1.get_header("X-picnic-did"), r"^[0-9A-F]{16}$")
+        self.assertNotEqual(h1.get_header("X-picnic-did"), h2.get_header("X-picnic-did"))
+
+    def test_deliveries_use_the_summary_endpoint(self):
+        op = FakeOpener(FakeResponse([]))
+        PicnicClient(opener=op).get_deliveries(["COMPLETED"])
+        req = op.requests[0]
+        self.assertTrue(req.full_url.endswith("/api/15/deliveries/summary"))
+        self.assertEqual(json.loads(req.data), ["COMPLETED"])
 
     def test_cart_mutations_use_expected_paths_and_bodies(self):
         op = FakeOpener(FakeResponse({}), FakeResponse({}), FakeResponse({}))
@@ -111,22 +130,48 @@ class ClientTests(unittest.TestCase):
 
 
 class HelperTests(unittest.TestCase):
-    def test_flatten_search_finds_nested_articles_and_respects_limit(self):
-        payload = [
-            {
-                "type": "CATEGORY",
-                "items": [
-                    {"type": "SINGLE_ARTICLE", "id": "1", "name": "Milk", "display_price": 99,
-                     "unit_quantity": "1 l", "unit_quantity_sub": "0.99/l"},
-                    {"type": "SINGLE_ARTICLE", "id": "2", "name": "Oats", "price": 150},
-                    {"type": "SINGLE_ARTICLE", "id": "3", "name": "Rice", "price": 200},
-                ],
+    @staticmethod
+    def tile(unit_id, name, price, article_id=None, **extra):
+        node = {"type": "SELLING_UNIT_TILE", "sellingUnit": {"id": unit_id, "name": name, "display_price": price, **extra}}
+        if article_id:
+            node["onPress"] = {"payload": json.dumps({"sole_article_id": article_id})}
+        return node
+
+    def test_flatten_search_finds_tiles_anywhere_and_respects_limit(self):
+        page = {
+            "body": {
+                "child": {
+                    "children": [
+                        {"children": [self.tile("s1", "Haferflocken", 99, "1001", unit_quantity="500 g",
+                                                 unit_quantity_sub="1.98/kg")]},
+                        {"deeper": [{"x": [self.tile("s2", "Haferdrink", 150, "1002")]}]},
+                        self.tile("s3", "Hafermilch", 200, "1003"),
+                    ]
+                }
             }
-        ]
-        out = flatten_search(payload, limit=2)
-        self.assertEqual([a["id"] for a in out], ["1", "2"])
+        }
+        out = flatten_search(page, limit=2)
+        self.assertEqual([a["id"] for a in out], ["1001", "1002"])
+        self.assertEqual(out[0]["selling_unit_id"], "s1")
         self.assertEqual(out[0]["price_cents"], 99)
-        self.assertEqual(out[1]["price_cents"], 150)
+        self.assertEqual(out[0]["unit_price"], "1.98/kg")
+        self.assertEqual(len(flatten_search(page, limit=10)), 3)
+
+    def test_flatten_search_reads_article_id_from_nested_key_or_embedded_string(self):
+        nested = {"type": "SELLING_UNIT_TILE", "sellingUnit": {"id": "s1", "name": "A"},
+                  "onPress": {"payload": {"sole_article_id": "111"}}}
+        embedded = self.tile("s2", "B", 100, "222")
+        self.assertEqual([a["id"] for a in flatten_search([nested, embedded])], ["111", "222"])
+
+    def test_flatten_search_falls_back_to_selling_unit_id_and_dedupes(self):
+        page = [self.tile("s9", "Milch", 89), self.tile("s9", "Milch", 89)]
+        out = flatten_search(page)
+        self.assertEqual([a["id"] for a in out], ["s9"])
+
+    def test_flatten_search_ignores_unrelated_and_empty_payloads(self):
+        self.assertEqual(flatten_search({"body": {"child": {"type": "TEXT"}}}), [])
+        self.assertEqual(flatten_search([]), [])
+        self.assertEqual(flatten_search({"error": {"code": "X"}}), [])
 
     def test_summarize_cart_extracts_quantity_and_total(self):
         cart = {

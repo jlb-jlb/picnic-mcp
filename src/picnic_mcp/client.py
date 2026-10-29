@@ -7,6 +7,8 @@ The Picnic API is private and can change or block access at any time.
 
 import hashlib
 import json
+import re
+import secrets
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,6 +18,8 @@ API_VERSION = "15"
 CLIENT_ID = 30100
 AUTH_HEADER = "x-picnic-auth"
 USER_AGENT = "okhttp/3.9.0"
+# The page endpoints (search, article details) only answer when these app headers are present.
+PICNIC_AGENT = "30100;1.206.1-#15408"
 SUPPORTED_COUNTRIES = ("nl", "de", "be", "fr")
 
 
@@ -35,6 +39,8 @@ class PicnicClient:
         self._base = BASE_URL.format(country=country, version=API_VERSION)
         self._timeout = timeout
         self._token = None
+        # Random per-instance device id, sent as the app's x-picnic-did header.
+        self._device_id = secrets.token_hex(8).upper()
         # Injectable so tests can replace the network layer.
         self._open = opener or urllib.request.build_opener().open
 
@@ -45,7 +51,12 @@ class PicnicClient:
     def _request(self, method: str, path: str, body=None):
         url = self._base + path
         data = None
-        headers = {"User-Agent": USER_AGENT, "Content-Type": "application/json; charset=UTF-8"}
+        headers = {
+            "User-Agent": USER_AGENT,
+            "Content-Type": "application/json; charset=UTF-8",
+            "x-picnic-agent": PICNIC_AGENT,
+            "x-picnic-did": self._device_id,
+        }
         if self._token:
             headers[AUTH_HEADER] = self._token
         if body is not None:
@@ -93,7 +104,8 @@ class PicnicClient:
         return self._get("/user")
 
     def search(self, term: str):
-        return self._get("/search?" + urllib.parse.urlencode({"search_term": term}))
+        # The old /search endpoint is gone. The page endpoint returns a UI tree of tiles.
+        return self._get("/pages/search-page-results?" + urllib.parse.urlencode({"search_term": term}))
 
     def get_article(self, article_id: str):
         return self._get("/articles/" + urllib.parse.quote(str(article_id), safe=""))
@@ -114,27 +126,49 @@ class PicnicClient:
         return self._get("/cart/delivery_slots")
 
     def get_deliveries(self, filters=None):
-        return self._post("/deliveries", list(filters or []))
+        # Unsummarised deliveries were removed by Picnic, only the summary endpoint remains.
+        return self._post("/deliveries/summary", list(filters or []))
+
+
+# Matches both a real nested key and an id inside an embedded JSON string, where json.dumps
+# escapes the quotes with backslashes.
+_SOLE_ARTICLE_ID = re.compile(r'\\*"sole_article_id\\*"\s*:\s*\\*"(\w+)')
 
 
 def flatten_search(payload, limit: int = 10):
-    """Reduce a raw search response to a short list of article dicts."""
+    """Reduce a search page to a short list of product dicts.
+
+    The search page is a UI tree whose shape varies by country and A/B test, so
+    this walks the whole tree for SELLING_UNIT_TILE nodes instead of using fixed
+    paths. Each tile carries a sellingUnit dict with the product data. The cart
+    takes the article id, which sits in a serialised "sole_article_id" string
+    inside the tile, so that is reported as "id" when present.
+    """
     out = []
+    seen = set()
 
     def walk(node):
         if len(out) >= limit:
             return
         if isinstance(node, dict):
-            if node.get("type") == "SINGLE_ARTICLE":
-                out.append(
-                    {
-                        "id": node.get("id"),
-                        "name": node.get("name"),
-                        "price_cents": node.get("display_price", node.get("price")),
-                        "unit_quantity": node.get("unit_quantity"),
-                        "unit_price": node.get("unit_quantity_sub"),
-                    }
-                )
+            unit = node.get("sellingUnit")
+            if node.get("type") == "SELLING_UNIT_TILE" and isinstance(unit, dict):
+                match = _SOLE_ARTICLE_ID.search(json.dumps(node))
+                unit_id = unit.get("id")
+                product_id = match.group(1) if match else unit_id
+                if product_id and product_id not in seen:
+                    seen.add(product_id)
+                    out.append(
+                        {
+                            "id": product_id,
+                            "selling_unit_id": unit_id,
+                            "name": unit.get("name"),
+                            "price_cents": unit.get("display_price"),
+                            "unit_quantity": unit.get("unit_quantity"),
+                            "unit_price": unit.get("unit_quantity_sub"),
+                            "price_ranges": unit.get("price_ranges"),
+                        }
+                    )
                 return
             for value in node.values():
                 walk(value)

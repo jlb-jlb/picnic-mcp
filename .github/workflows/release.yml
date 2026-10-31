@@ -1,0 +1,47 @@
+name: release
+
+# Pushing a tag such as v0.2.0 tests the tagged commit, checks that every version number
+# agrees with the tag and publishes a GitHub Release with generated notes.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: release ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: The tag matches every version number
+        run: |
+          python3 - <<'PY'
+          import json, os, tomllib
+          tag = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          found = {
+              "pyproject.toml": tomllib.load(open("pyproject.toml", "rb"))["project"]["version"],
+              ".claude-plugin/plugin.json": json.load(open(".claude-plugin/plugin.json"))["version"],
+          }
+          bad = {name: version for name, version in found.items() if version != tag}
+          if bad:
+              raise SystemExit(f"tag v{tag} does not match {bad}")
+          print(f"all versions are {tag}")
+          PY
+
+      - name: Tests
+        run: uv run --locked python -m unittest discover -s tests
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"

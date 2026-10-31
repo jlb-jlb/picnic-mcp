@@ -35,7 +35,9 @@ There is no checkout tool on purpose. The server fills the cart and you confirm 
 
 Requires [uv](https://docs.astral.sh/uv/). Python 3.14 is pinned in `.python-version` and uv fetches it automatically.
 
-Log in once in a terminal. It asks for the password with hidden input, has Picnic send a code by SMS or e-mail, and stores the session token in the operating system's own credential store: Windows Credential Manager, macOS Keychain, or the Linux desktop keyring (needs `secret-tool` from libsecret and a running keyring). There is no file fallback, so on a system without a keyring the login fails with a message that says what to install. The server uses only that token and never sees the password. An older plain token file is moved into the store on first use and deleted. Log in again if the token stops working.
+The easiest way is the `start_login` tool: ask Claude to log in to Picnic and it opens a sign-in page in your browser. The page runs on your own computer (127.0.0.1, a one-time address, closes after 5 minutes), asks for e-mail, password and the code Picnic sends, and hands the result to the credential store described below. The password goes straight to Picnic and never reaches Claude. The same page opens from a terminal with `picnic-mcp login --web`. It sets no scripts or cookies, rejects requests from other sites or host names, limits failed attempts and logs nothing.
+
+The plain terminal login still works: log in once in a terminal. It asks for the password with hidden input, has Picnic send a code by SMS or e-mail, and stores the session token in the operating system's own credential store: Windows Credential Manager, macOS Keychain, or the Linux desktop keyring (needs `secret-tool` from libsecret and a running keyring). There is no file fallback, so on a system without a keyring the login fails with a message that says what to install. The server uses only that token and never sees the password. An older plain token file is moved into the store on first use and deleted. Log in again if the token stops working.
 
 ```bash
 uv run --directory C:\Users\josch\Projects\picnic-mcp picnic-mcp login

@@ -14,7 +14,7 @@ import os
 import re
 import sys
 
-from . import finder
+from . import finder, weblogin
 from .icon import ICON_PNG_BASE64
 from .auth import load_token, login_main
 from .secretstore import SecretStoreError
@@ -54,7 +54,7 @@ def get_client() -> PicnicClient:
             _client = PicnicClient(country=country, token=token)
             return _client
         raise PicnicAuthError(
-            "no stored session for this country, run `picnic-mcp login` once in a terminal "
+            "no stored session for this country. Call the start_login tool, or run `picnic-mcp login` in a terminal "
             "(Picnic requires a two-factor code)"
         )
     return _client
@@ -106,6 +106,18 @@ def tool_get_delivery_slots(args):
 
 def tool_get_order_history(args):
     return get_client().get_deliveries(["COMPLETED"])
+
+
+def tool_start_login(args):
+    country = os.environ.get("PICNIC_COUNTRY", "nl")
+    _login, url, opened = weblogin.begin(country)
+    return {
+        "url": url,
+        "browser_opened": opened,
+        "expires_in_seconds": weblogin.TIMEOUT_SECONDS,
+        "next": "Tell the user to sign in on that page and enter the code Picnic sends. "
+        "Then retry the request. Do not ask for or handle the password yourself.",
+    }
 
 
 MAX_FINDER_ITEMS = 20
@@ -305,6 +317,14 @@ TOOLS = {
         },
         tool_find_ingredients,
     ),
+    "start_login": (
+        "Open a sign-in page for Picnic in the user's browser. The page runs on the user's own computer "
+        "(127.0.0.1, one-time address, expires after 5 minutes), asks for e-mail, password and the code "
+        "Picnic sends by SMS or e-mail, and stores the session token in the system credential store. The "
+        "password never reaches Claude. Use it when another tool reports that no session is stored.",
+        {"type": "object", "properties": {}},
+        tool_start_login,
+    ),
     "get_cart": ("Show the current cart with item counts and the total price in cents.", {"type": "object", "properties": {}}, tool_get_cart),
     "add_to_cart": (
         "Add a product to the cart. Does not place an order.",
@@ -471,7 +491,7 @@ def serve(stdin=None, stdout=None):
 
 def main() -> None:
     if sys.argv[1:2] == ["login"]:
-        sys.exit(login_main())
+        sys.exit(weblogin.web_login_main() if sys.argv[2:3] == ["--web"] else login_main())
     # MCP messages are UTF-8 JSON. On Windows the pipes default to the ANSI code page, which turns
     # "ö" into U+FFFD in both directions, so fix the encoding before the first message.
     sys.stdin.reconfigure(encoding="utf-8")

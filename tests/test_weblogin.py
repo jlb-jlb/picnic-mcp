@@ -163,6 +163,20 @@ class SafeguardTests(unittest.TestCase):
         status, _, _ = page.post("login", {"user": "a@b.de", "password": "x", "channel": "SMS"}, headers={"Origin": f"http://127.0.0.1:{page.port}"})
         self.assertEqual(status, 200)
 
+    def test_null_origin_is_accepted_only_when_the_browser_says_same_origin(self):
+        # Firefox sends "Origin: null" on a form post under some referrer policies.
+        body = {"user": "a@b.de", "password": "x", "channel": "SMS"}
+        page = Page(self)
+        self.assertEqual(page.post("login", body, headers={"Origin": "null", "Sec-Fetch-Site": "same-origin"})[0], 200)
+        for headers in ({"Origin": "null"}, {"Origin": "null", "Sec-Fetch-Site": "cross-site"}):
+            page = Page(self)
+            self.assertEqual(page.post("login", body, headers=headers)[0], 404, headers)
+
+    def test_referrer_policy_keeps_the_secret_off_other_sites(self):
+        page = Page(self)
+        _, _, headers = page.request("GET")
+        self.assertEqual(headers.get("Referrer-Policy"), "same-origin")
+
     def test_oversized_body_is_refused(self):
         page = Page(self)
         status, _, _ = page.post("login", {"user": "a" * 10000})

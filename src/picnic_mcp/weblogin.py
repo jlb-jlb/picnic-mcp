@@ -42,7 +42,9 @@ _STYLE = (
 _HEADERS = {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "no-store",
-    "Referrer-Policy": "no-referrer",
+    # same-origin keeps the secret out of any Referer sent elsewhere, and unlike no-referrer it makes
+    # Firefox send the real Origin instead of "null" on the form post.
+    "Referrer-Policy": "same-origin",
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
@@ -117,8 +119,12 @@ class WebLogin:
     def allowed_host(self, host):
         return host in (f"127.0.0.1:{self.port}", f"localhost:{self.port}")
 
-    def allowed_origin(self, origin):
-        return origin is None or origin in (f"http://127.0.0.1:{self.port}", f"http://localhost:{self.port}")
+    def allowed_origin(self, origin, fetch_site=None):
+        """Same-origin posts only. Some browsers send `Origin: null` for a form post, so that value
+        counts only when the browser itself says the request is same-origin (Sec-Fetch-Site)."""
+        if origin is None or origin in (f"http://127.0.0.1:{self.port}", f"http://localhost:{self.port}"):
+            return True
+        return origin == "null" and fetch_site == "same-origin"
 
     def route(self, path):
         """The part of the path after the secret, or None when the secret is wrong."""
@@ -254,7 +260,7 @@ def _make_handler(login):
             # Read (a bounded amount of) the body before replying, otherwise the browser sees a
             # reset connection instead of the answer.
             body = self.rfile.read(min(max(length, 0), 4 * MAX_BODY))
-            if route not in ("login", "code") or not login.allowed_origin(self.headers.get("Origin")):
+            if route not in ("login", "code") or not login.allowed_origin(self.headers.get("Origin"), self.headers.get("Sec-Fetch-Site")):
                 return self._not_found()
             if not 0 <= length <= MAX_BODY:
                 return self._send(413, _page("Too large", ""))

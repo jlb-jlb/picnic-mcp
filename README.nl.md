@@ -120,6 +120,8 @@ uv run python -m unittest discover -s tests
 
 De tests draaien offline tegen een nagebootste netwerklaag. De continuous integration voert ze uit op Windows, macOS en Linux en doet daarnaast een echte rondgang tegen de opslag voor inloggegevens van elk systeem.
 
+Uitbrengen: verhoog de versie in `pyproject.toml`, `.claude-plugin/plugin.json` en `src/picnic_mcp/server.py`, voer `uv lock` uit en zet `ref` en `version` van het pluginitem in `.claude-plugin/marketplace.json` op de nieuwe tag. Commit en push daarna een tag zoals `v0.3.0`. De releaseworkflow controleert of de tag bij de versies past, draait de tests en publiceert de GitHub-release. Plugin-installaties volgen de tag uit het marketplacebestand en niet `main`.
+
 Opbouw:
 
 - `src/picnic_mcp/client.py`: HTTP-client (`urllib`), inloggen, zoeken, winkelmandje, recepten, bezorgingen en hulpfuncties die antwoorden voor het model inkorten.

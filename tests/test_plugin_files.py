@@ -38,6 +38,13 @@ class PluginFilesTests(unittest.TestCase):
         self.assertRegex(PLUGIN["name"], r"^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$")
         self.assertEqual([p["name"] for p in MARKET["plugins"]], [PLUGIN["name"]])
 
+    def test_marketplace_installs_the_tagged_release_of_this_version(self):
+        # Installs must not follow main, so the entry names a tag, and it must be this version's tag.
+        entry = MARKET["plugins"][0]
+        self.assertEqual(entry["source"]["source"], "github")
+        self.assertEqual(entry["source"]["ref"], f"v{PYPROJECT['project']['version']}")
+        self.assertEqual(entry["version"], PYPROJECT["project"]["version"])
+
     def test_readme_license_and_skill_exist_with_enough_content(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         prose = re.sub(r"```.*?```", "", readme, flags=re.S)

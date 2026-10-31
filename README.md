@@ -120,6 +120,8 @@ uv run python -m unittest discover -s tests
 
 The tests run offline against a fake network layer. Continuous integration runs them on Windows, macOS and Linux and also does a real round trip against each system's credential store.
 
+Releasing: raise the version in `pyproject.toml`, `.claude-plugin/plugin.json` and `src/picnic_mcp/server.py`, run `uv lock`, and set the `ref` and `version` of the plugin entry in `.claude-plugin/marketplace.json` to the new tag. Commit, then push a tag such as `v0.3.0`. The release workflow checks that the tag matches the versions, runs the tests and publishes the GitHub Release. Plugin installs follow the tag named in the marketplace file, not `main`.
+
 Layout:
 
 - `src/picnic_mcp/client.py`: HTTP client (`urllib`), login, search, cart, recipes, deliveries, plus helpers that shrink responses for the model.

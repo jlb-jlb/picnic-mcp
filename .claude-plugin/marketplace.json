@@ -10,8 +10,13 @@
   "plugins": [
     {
       "name": "picnic-mcp",
-      "source": "./",
-      "description": "Search Picnic groceries, pick the best product per ingredient, manage your cart and recipes, and plan healthy meals. Unofficial."
+      "source": {
+        "source": "github",
+        "repo": "jlb-jlb/picnic-mcp",
+        "ref": "v0.2.0"
+      },
+      "description": "Search Picnic groceries, pick the best product per ingredient, manage your cart and recipes, and plan healthy meals. Unofficial.",
+      "version": "0.2.0"
     }
   ]
 }

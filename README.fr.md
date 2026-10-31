@@ -120,6 +120,8 @@ uv run python -m unittest discover -s tests
 
 Les tests s'exécutent hors ligne contre une couche réseau simulée. L'intégration continue les lance sous Windows, macOS et Linux et effectue en plus un vrai aller-retour avec le magasin d'identifiants de chaque système.
 
+Publier une version : augmente la version dans `pyproject.toml`, `.claude-plugin/plugin.json` et `src/picnic_mcp/server.py`, exécute `uv lock` et mets `ref` et `version` de l'entrée du plugin dans `.claude-plugin/marketplace.json` sur le nouveau tag. Fais un commit, puis pousse un tag comme `v0.3.0`. Le workflow de publication vérifie que le tag correspond aux versions, lance les tests et publie la release GitHub. Les installations du plugin suivent le tag du fichier marketplace et non `main`.
+
 Structure :
 
 - `src/picnic_mcp/client.py` : client HTTP (`urllib`), connexion, recherche, panier, recettes, livraisons et fonctions qui raccourcissent les réponses pour le modèle.

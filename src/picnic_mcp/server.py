@@ -472,6 +472,10 @@ def serve(stdin=None, stdout=None):
 def main() -> None:
     if sys.argv[1:2] == ["login"]:
         sys.exit(login_main())
+    # MCP messages are UTF-8 JSON. On Windows the pipes default to the ANSI code page, which turns
+    # "ö" into U+FFFD in both directions, so fix the encoding before the first message.
+    sys.stdin.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8", newline="\n")
     print("picnic-mcp ready on stdio", file=sys.stderr)
     serve()
 

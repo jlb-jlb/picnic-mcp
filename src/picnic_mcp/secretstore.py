@@ -59,36 +59,77 @@ class LinuxStore:
 
 
 class MacStore:
-    """Keychain. Reading and deleting use the security tool, writing uses the Security framework."""
+    """Keychain, always through the Security framework from this process.
+
+    The item is created by this Python binary, so only that binary is on its access list. Reading it
+    with /usr/bin/security instead makes macOS ask the user to approve the tool, which is a dialog on
+    a desktop and a hang on a machine without one. Reading and deleting from the creating process
+    needs no approval.
+    """
 
     DUPLICATE_ITEM = -25299
+    NOT_FOUND = -25300
 
-    def get(self, service, account):
-        result = _run(["security", "find-generic-password", "-s", service, "-a", account, "-w"])
-        if result.returncode == 0:
-            return result.stdout.rstrip("\n") or None
-        if result.returncode == 44:  # errSecItemNotFound
-            return None
-        raise SecretStoreError(f"Keychain read failed: {result.stderr.strip() or result.returncode}")
-
-    def delete(self, service, account):
-        _run(["security", "delete-generic-password", "-s", service, "-a", account])
-
-    def set(self, service, account, value):
+    def _libraries(self):
         import ctypes
 
         security = ctypes.CDLL("/System/Library/Frameworks/Security.framework/Security")
-        add = security.SecKeychainAddGenericPassword
-        add.restype = ctypes.c_int32
-        add.argtypes = [
-            ctypes.c_void_p, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_uint32, ctypes.c_char_p,
-            ctypes.c_uint32, ctypes.c_char_p, ctypes.c_void_p,
+        core = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        u32, cptr, vptr = ctypes.c_uint32, ctypes.c_char_p, ctypes.c_void_p
+        security.SecKeychainAddGenericPassword.restype = ctypes.c_int32
+        security.SecKeychainAddGenericPassword.argtypes = [vptr, u32, cptr, u32, cptr, u32, cptr, vptr]
+        security.SecKeychainFindGenericPassword.restype = ctypes.c_int32
+        security.SecKeychainFindGenericPassword.argtypes = [
+            vptr, u32, cptr, u32, cptr, ctypes.POINTER(u32), ctypes.POINTER(vptr), ctypes.POINTER(vptr),
         ]
+        security.SecKeychainItemFreeContent.restype = ctypes.c_int32
+        security.SecKeychainItemFreeContent.argtypes = [vptr, vptr]
+        security.SecKeychainItemDelete.restype = ctypes.c_int32
+        security.SecKeychainItemDelete.argtypes = [vptr]
+        core.CFRelease.restype = None
+        core.CFRelease.argtypes = [vptr]
+        return ctypes, security, core
+
+    def _lookup(self, service, account, delete=False):
+        """Return (status, secret bytes or None). With delete=True the found item is removed instead."""
+        ctypes, security, core = self._libraries()
+        svc, acct = service.encode(), account.encode()
+        length, data, item = ctypes.c_uint32(), ctypes.c_void_p(), ctypes.c_void_p()
+        status = security.SecKeychainFindGenericPassword(
+            None, len(svc), svc, len(acct), acct, ctypes.byref(length), ctypes.byref(data), ctypes.byref(item)
+        )
+        if status != 0:
+            return status, None
+        try:
+            secret = ctypes.string_at(data.value, length.value) if data.value else b""
+            if delete:
+                status = security.SecKeychainItemDelete(item)
+            return status, secret
+        finally:
+            security.SecKeychainItemFreeContent(None, data)
+            if item.value:
+                core.CFRelease(item)
+
+    def get(self, service, account):
+        status, secret = self._lookup(service, account)
+        if status == self.NOT_FOUND:
+            return None
+        if status != 0:
+            raise SecretStoreError(f"Keychain read failed with status {status}")
+        return secret.decode("utf-8") or None
+
+    def delete(self, service, account):
+        status, _ = self._lookup(service, account, delete=True)
+        if status not in (0, self.NOT_FOUND):
+            raise SecretStoreError(f"Keychain delete failed with status {status}")
+
+    def set(self, service, account, value):
+        ctypes, security, _ = self._libraries()
         svc, acct, secret = service.encode(), account.encode(), value.encode()
-        status = add(None, len(svc), svc, len(acct), acct, len(secret), secret, None)
+        status = security.SecKeychainAddGenericPassword(None, len(svc), svc, len(acct), acct, len(secret), secret, None)
         if status == self.DUPLICATE_ITEM:
             self.delete(service, account)
-            status = add(None, len(svc), svc, len(acct), acct, len(secret), secret, None)
+            status = security.SecKeychainAddGenericPassword(None, len(svc), svc, len(acct), acct, len(secret), secret, None)
         if status != 0:
             raise SecretStoreError(f"Keychain write failed with status {status}")
 

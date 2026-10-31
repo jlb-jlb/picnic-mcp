@@ -46,18 +46,29 @@ class LinuxStoreTests(unittest.TestCase):
 
 
 class MacStoreTests(unittest.TestCase):
-    def test_read_uses_the_security_tool_and_strips_the_newline(self):
-        with mock.patch.object(secretstore, "_run", return_value=done(0, "tok\n")) as run:
-            self.assertEqual(secretstore.MacStore().get("svc", "acct"), "tok")
-        self.assertEqual(run.call_args.args[0][:2], ["security", "find-generic-password"])
+    def test_read_decodes_the_secret_without_using_the_security_tool(self):
+        store = secretstore.MacStore()
+        with mock.patch.object(store, "_lookup", return_value=(0, "tök".encode())), \
+                mock.patch.object(secretstore, "_run") as run:
+            self.assertEqual(store.get("svc", "acct"), "tök")
+        run.assert_not_called()  # the tool is not on the item's access list and would prompt
 
     def test_not_found_is_none_and_other_failures_raise(self):
         store = secretstore.MacStore()
-        with mock.patch.object(secretstore, "_run", return_value=done(44)):
+        with mock.patch.object(store, "_lookup", return_value=(store.NOT_FOUND, None)):
             self.assertIsNone(store.get("svc", "acct"))
-        with mock.patch.object(secretstore, "_run", return_value=done(1, "", "denied")):
+        with mock.patch.object(store, "_lookup", return_value=(-25293, None)):
             with self.assertRaises(secretstore.SecretStoreError):
                 store.get("svc", "acct")
+
+    def test_delete_ignores_a_missing_item_but_reports_other_failures(self):
+        store = secretstore.MacStore()
+        with mock.patch.object(store, "_lookup", return_value=(store.NOT_FOUND, None)) as lookup:
+            store.delete("svc", "acct")
+        self.assertTrue(lookup.call_args.kwargs["delete"])
+        with mock.patch.object(store, "_lookup", return_value=(-25293, None)):
+            with self.assertRaises(secretstore.SecretStoreError):
+                store.delete("svc", "acct")
 
 
 @unittest.skipUnless(sys.platform == "win32", "Windows Credential Manager only")

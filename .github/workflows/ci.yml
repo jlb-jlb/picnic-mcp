@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+
+      # Linux needs a running Secret Service for the real credential store round trip.
+      - name: Install a keyring (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsecret-tools gnome-keyring dbus-x11
+
+      - name: Tests (Linux, with a real keyring)
+        if: runner.os == 'Linux'
+        env:
+          PICNIC_REAL_STORE: "1"
+        run: |
+          dbus-run-session -- bash -c '
+            echo -n "ci-keyring" | gnome-keyring-daemon --unlock --components=secrets > /dev/null
+            uv run --locked python -m unittest discover -s tests -v
+          '
+
+      - name: Tests (macOS and Windows, real credential store)
+        if: runner.os != 'Linux'
+        env:
+          PICNIC_REAL_STORE: "1"
+        run: uv run --locked python -m unittest discover -s tests -v
+
+  plugin:
+    name: plugin files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Launch the server the way the plugin does
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            | PICNIC_COUNTRY=nl UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/venv" uv run --locked --directory "$GITHUB_WORKSPACE" picnic-mcp \
+            | grep -q '"name": "picnic-mcp"'

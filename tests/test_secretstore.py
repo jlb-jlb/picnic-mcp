@@ -1,3 +1,4 @@
+import os
 import sys
 import unittest
 import uuid
@@ -78,6 +79,23 @@ class WindowsStoreTests(unittest.TestCase):
     def test_oversized_secret_is_refused(self):
         with self.assertRaises(secretstore.SecretStoreError):
             secretstore.WindowsStore().set("picnic-mcp-test", "big", "x" * 5000)
+
+
+@unittest.skipUnless(os.environ.get("PICNIC_REAL_STORE") == "1", "set PICNIC_REAL_STORE=1 to use this system's real credential store")
+class RealStoreTests(unittest.TestCase):
+    """Round trip through whichever store this operating system provides. Runs in CI on all three systems."""
+
+    def test_default_store_roundtrip(self):
+        store = secretstore.default_store()
+        service, account = "picnic-mcp-test-" + uuid.uuid4().hex, "token-xx"
+        self.addCleanup(store.delete, service, account)
+        self.assertIsNone(store.get(service, account))
+        store.set(service, account, "first-Ünïcode")
+        self.assertEqual(store.get(service, account), "first-Ünïcode")
+        store.set(service, account, "second")
+        self.assertEqual(store.get(service, account), "second")
+        store.delete(service, account)
+        self.assertIsNone(store.get(service, account))
 
 
 class DefaultStoreTests(unittest.TestCase):

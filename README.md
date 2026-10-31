@@ -13,6 +13,7 @@ Accounts with two-factor login (the German one is) get HTTP 403 `TWO_FACTOR_AUTH
 | Tool | What it does |
 |---|---|
 | `search_products` | Search the catalogue. Returns id, name, price in cents, unit size and unit price. |
+| `find_ingredients` | Picks the best product per ingredient by a preference (cheapest for the amount, best value per kg, organic, conventional, smallest or largest pack) and returns the packs to buy, total cost and leftover |
 | `get_cart` | Show cart items and the total in cents. |
 | `add_to_cart` | Add a product by id (count 1 to 50). |
 | `remove_from_cart` | Remove a quantity of a product. |

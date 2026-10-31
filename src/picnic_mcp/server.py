@@ -14,6 +14,7 @@ import os
 import re
 import sys
 
+from . import finder
 from .auth import load_token, login_main
 from .client import (
     PicnicAuthError,
@@ -94,6 +95,47 @@ def tool_get_delivery_slots(args):
 
 def tool_get_order_history(args):
     return get_client().get_deliveries(["COMPLETED"])
+
+
+MAX_FINDER_ITEMS = 20
+
+
+def _finder_item(item, default_preference):
+    if not isinstance(item, dict):
+        raise ValueError("each item must be an object with a query")
+    query = item.get("query")
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("query must be a non-empty string")
+    exclude = item.get("exclude", [])
+    if not isinstance(exclude, list) or not all(isinstance(e, str) for e in exclude):
+        raise ValueError("exclude must be a list of words")
+    result = finder.find(
+        flatten_search(get_client().search(query.strip()), 40),
+        query.strip(),
+        item.get("preference", default_preference),
+        item.get("amount"),
+        exclude,
+    )
+    return result
+
+
+def tool_find_ingredients(args):
+    items = args.get("items")
+    if not isinstance(items, list) or not 1 <= len(items) <= MAX_FINDER_ITEMS:
+        raise ValueError(f"items must be a list of 1 to {MAX_FINDER_ITEMS} objects")
+    default = args.get("preference", "cheapest")
+    if default not in finder.PREFERENCES:
+        raise ValueError(f"preference must be one of {', '.join(finder.PREFERENCES)}")
+    results = []
+    for item in items:
+        try:
+            results.append(_finder_item(item, default))
+        except PicnicAuthError:
+            raise
+        except (ValueError, PicnicError) as exc:
+            # One bad ingredient should not hide the others.
+            results.append({"query": item.get("query") if isinstance(item, dict) else None, "error": str(exc)})
+    return results
 
 
 MAX_INGREDIENTS = 40
@@ -216,6 +258,41 @@ TOOLS = {
             "required": ["query"],
         },
         tool_search_products,
+    ),
+    "find_ingredients": (
+        "Find the best Picnic product for each ingredient of a recipe or shopping list, by a preference. "
+        "Per item it searches, keeps products whose name contains every query word, and ranks them. "
+        "Preferences: 'cheapest' (lowest total cost for the amount, so a 250 g pack beats a 1 kg pack "
+        "when 200 g is needed), 'best_value' (lowest price per kg or litre), 'organic' (only Bio products, "
+        "cheapest first), 'conventional', 'smallest_pack', 'largest_pack'. Give amount like '300 g', "
+        "'0.5 l' or '3' (pieces) to get the packs to buy, the total cost and the leftover. Organic is "
+        "recognised from the product name (Bio, Bioland, Demeter, Naturland). Set preference per item to "
+        "mix, for example organic vegetables and cheapest pasta. exclude drops products whose name "
+        "contains a word, such as 'mix' or 'stifte'. Returns best and a few alternatives per item and "
+        "does not touch the cart: confirm the choices, then call add_to_cart with packs as count.",
+        {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": MAX_FINDER_ITEMS,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Ingredient search term, e.g. 'karotten'"},
+                            "amount": {"type": ["string", "number"], "description": "Amount needed, e.g. '300 g'"},
+                            "preference": {"type": "string", "enum": list(finder.PREFERENCES)},
+                            "exclude": {"type": "array", "items": {"type": "string"}},
+                        },
+                        "required": ["query"],
+                    },
+                },
+                "preference": {"type": "string", "enum": list(finder.PREFERENCES), "default": "cheapest"},
+            },
+            "required": ["items"],
+        },
+        tool_find_ingredients,
     ),
     "get_cart": ("Show the current cart with item counts and the total price in cents.", {"type": "object", "properties": {}}, tool_get_cart),
     "add_to_cart": (

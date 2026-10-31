@@ -16,7 +16,7 @@ import sys
 
 from . import finder, weblogin
 from .icon import ICON_PNG_BASE64
-from .auth import load_token, login_main
+from .auth import forget_token, load_token, login_main
 from .secretstore import SecretStoreError
 from .client import (
     PicnicAuthError,
@@ -32,7 +32,7 @@ PROTOCOL_VERSION = "2025-06-18"
 SERVER_INFO = {
     "name": "picnic-mcp",
     "title": "Picnic",
-    "version": "0.1.0",
+    "version": "0.2.0",
     # Clients that support server icons show this in the connector list.
     "icons": [{"src": "data:image/png;base64," + ICON_PNG_BASE64, "mimeType": "image/png", "sizes": ["128x128"]}],
 }
@@ -528,6 +528,15 @@ def serve(stdin=None, stdout=None):
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["logout"]:
+        country = os.environ.get("PICNIC_COUNTRY", "nl")
+        try:
+            forget_token(country)
+        except SecretStoreError as exc:
+            print(f"could not reach the credential store: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"removed the stored session for {country}", file=sys.stderr)
+        sys.exit(0)
     if sys.argv[1:2] == ["login"]:
         sys.exit(weblogin.web_login_main() if sys.argv[2:3] == ["--web"] else login_main())
     # MCP messages are UTF-8 JSON. On Windows the pipes default to the ANSI code page, which turns

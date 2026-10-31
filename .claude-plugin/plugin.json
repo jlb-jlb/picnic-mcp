@@ -1,0 +1,32 @@
+{
+  "name": "picnic-mcp",
+  "displayName": "Picnic MCP",
+  "version": "0.2.0",
+  "description": "Search Picnic groceries, pick the best product per ingredient (cheapest, organic, best value), manage your cart and recipes, and plan healthy meals. Unofficial, standard library only, you confirm the order in the Picnic app.",
+  "author": {
+    "name": "Joscha Bisping",
+    "url": "https://joschabisping.de"
+  },
+  "license": "MIT",
+  "keywords": ["picnic", "groceries", "recipes", "mcp", "meal-planning"],
+  "userConfig": {
+    "country": {
+      "type": "string",
+      "title": "Picnic country",
+      "description": "The country of your Picnic account: nl, de, be or fr. Sign-in happens later in a page on your own computer, no password is entered here.",
+      "options": ["nl", "de", "be", "fr"],
+      "default": "nl",
+      "required": true
+    }
+  },
+  "mcpServers": {
+    "picnic": {
+      "command": "uv",
+      "args": ["run", "--locked", "--directory", "${CLAUDE_PLUGIN_ROOT}", "picnic-mcp"],
+      "env": {
+        "PICNIC_COUNTRY": "${user_config.country}",
+        "UV_PROJECT_ENVIRONMENT": "${CLAUDE_PLUGIN_DATA}/venv"
+      }
+    }
+  }
+}

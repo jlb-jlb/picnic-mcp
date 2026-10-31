@@ -1,0 +1,17 @@
+{
+  "name": "picnic-mcp-marketplace",
+  "owner": {
+    "name": "Joscha Bisping",
+    "url": "https://joschabisping.de"
+  },
+  "metadata": {
+    "description": "Plugins by Joscha Bisping. Currently one: an unofficial Picnic grocery assistant for Claude."
+  },
+  "plugins": [
+    {
+      "name": "picnic-mcp",
+      "source": "./",
+      "description": "Search Picnic groceries, pick the best product per ingredient, manage your cart and recipes, and plan healthy meals. Unofficial."
+    }
+  ]
+}

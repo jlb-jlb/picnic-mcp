@@ -57,10 +57,19 @@ def get_client() -> PicnicClient:
             _client = PicnicClient(country=country, token=token)
             return _client
         raise PicnicAuthError(
-            "no stored session for this country. Call the start_login tool, or run `picnic-mcp login` in a terminal "
-            "(Picnic requires a two-factor code)"
+            "no stored session for this country. Call the start_login tool now, without asking the user first: it "
+            "opens a sign-in page in their browser where they enter the password and the two-factor code. Only if that "
+            f"fails, the user can run this in a terminal: {_login_command()}"
         )
     return _client
+
+
+def _login_command() -> str:
+    """A terminal command that works even when picnic-mcp is not on PATH (uv and plugin installs)."""
+    launcher = os.path.abspath(sys.argv[0]) if sys.argv and sys.argv[0] else ""
+    if launcher and os.path.isfile(launcher) and not launcher.lower().endswith(".py"):
+        return f'{"& " if sys.platform == "win32" else ""}"{launcher}" login --web'
+    return "uv run picnic-mcp login --web"
 
 
 def _count(args) -> int:

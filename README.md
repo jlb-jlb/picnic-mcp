@@ -36,7 +36,7 @@ Use the absolute path to the clone if your client starts the server from another
 
 Ask Claude to log in to Picnic. It calls the `start_login` tool, which opens a sign-in page in your browser. You enter your e-mail and password, choose SMS or e-mail for the one-time code, and enter the code. Picnic requires this two-factor step on accounts that have it enabled.
 
-The page runs on your own computer and closes when you are done. It sends your details only to Picnic. Claude never sees your password or the code. Without Claude, the same page opens with `picnic-mcp login --web`, and a plain terminal prompt is available with `picnic-mcp login`.
+The page runs on your own computer and closes when you are done. It sends your details only to Picnic. Claude never sees your password or the code. Without Claude, the same page opens with `uv run --directory <path to this repository> picnic-mcp login --web`, and a plain terminal prompt is available by leaving out `--web`. The plain `picnic-mcp` command only exists on your PATH if you installed the package with `uv tool install`.
 
 ## Where your credentials go
 
@@ -102,7 +102,7 @@ There is no checkout tool on purpose. The server fills the cart and you confirm 
 
 | Problem | What to do |
 |---|---|
-| "no stored session" | Ask Claude to log in, or run `picnic-mcp login --web`. |
+| "no stored session" | Ask Claude to log in, or run `uv run --directory <path to this repository> picnic-mcp login --web`. |
 | Login fails right after the code | Check that the country setting matches your account. Codes expire quickly. |
 | "no desktop keyring found" (Linux) | Install `libsecret-tools` and a keyring such as `gnome-keyring`, and run inside a desktop session. |
 | HTTP 403 on every call | The session token expired. Log in again. |

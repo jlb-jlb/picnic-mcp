@@ -261,7 +261,9 @@ class AuthTests(unittest.TestCase):
         self.assertTrue(r["result"]["isError"])
         text = r["result"]["content"][0]["text"]
         self.assertIn("start_login", text)
-        self.assertIn("picnic-mcp login", text)
+        self.assertIn("without asking", text)
+        self.assertIn("login --web", text)
+        self.assertNotIn("run `picnic-mcp login`", text)
 
     def test_a_missing_credential_store_is_an_authentication_error_with_its_hint(self):
         from picnic_mcp.secretstore import SecretStoreError

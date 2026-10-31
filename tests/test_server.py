@@ -255,11 +255,21 @@ class ToolTests(unittest.TestCase):
 
 class AuthTests(unittest.TestCase):
     def test_missing_session_points_to_the_login_command(self):
-        env = {}
-        with mock.patch.object(server, "_client", None), mock.patch.dict("os.environ", env, clear=True):
+        # Never touch the real credential store from a test.
+        with mock.patch.object(server, "_client", None), mock.patch.object(server, "load_token", return_value=None):
             r = call("get_cart", {})
         self.assertTrue(r["result"]["isError"])
-        self.assertIn("picnic-mcp login", r["result"]["content"][0]["text"])
+        text = r["result"]["content"][0]["text"]
+        self.assertIn("start_login", text)
+        self.assertIn("picnic-mcp login", text)
+
+    def test_a_missing_credential_store_is_an_authentication_error_with_its_hint(self):
+        from picnic_mcp.secretstore import SecretStoreError
+
+        with mock.patch.object(server, "_client", None),                 mock.patch.object(server, "load_token", side_effect=SecretStoreError("install secret-tool")):
+            r = call("get_cart", {})
+        self.assertTrue(r["result"]["isError"])
+        self.assertEqual(r["result"]["content"][0]["text"], "authentication error: install secret-tool")
 
     def test_stored_token_creates_the_client(self):
         with mock.patch.object(server, "_client", None), \

@@ -2,6 +2,8 @@
 
 # picnic-mcp
 
+**English** | [Deutsch](README.de.md) | [Nederlands](README.nl.md) | [Français](README.fr.md)
+
 An MCP server and Claude plugin for [Picnic](https://picnic.app), the grocery delivery app. Claude can search the catalogue, pick the best product for each ingredient (cheapest, organic, best value), fill your cart, read Picnic recipes with their nutrition, and save your own recipes in the app. You confirm and pay for the order in the Picnic app, so Claude never checks out for you.
 
 It uses only the Python standard library. There is nothing to install from PyPI and no third-party code to trust. The Picnic client, the MCP protocol layer, the browser login and the credential storage are all written from scratch in this repository.

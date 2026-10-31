@@ -63,6 +63,23 @@ class PluginFilesTests(unittest.TestCase):
         for name in TOOLS:
             self.assertIn(f"`{name}`", readme, name)
 
+    def test_translated_readmes_stay_in_step_with_the_english_one(self):
+        from picnic_mcp.server import TOOLS
+
+        english = (ROOT / "README.md").read_text(encoding="utf-8")
+        names = {"en": "English", "de": "Deutsch", "nl": "Nederlands", "fr": "Français"}
+        files = {code: "README.md" if code == "en" else f"README.{code}.md" for code in names}
+        for code, file in files.items():
+            text = (ROOT / file).read_text(encoding="utf-8")
+            # Every file shows the language row, with its own language unlinked and the others linked.
+            for other, label in names.items():
+                expected = f"**{label}**" if other == code else f"[{label}]({files[other]})"
+                self.assertIn(expected, text, f"{file} language row")
+            for name in TOOLS:
+                self.assertIn(f"`{name}`", text, f"{file} lacks {name}")
+            self.assertEqual(text.count("```"), english.count("```"), f"{file} code blocks differ")
+            self.assertIn("assets/banner.png", text, file)
+
     def test_text_files_contain_no_em_dashes(self):
         files = [p for p in ROOT.rglob("*") if p.is_file() and p.suffix in {".py", ".md", ".json", ".toml", ".yml"} and ".venv" not in p.parts and ".git" not in p.parts and "__pycache__" not in p.parts]
         offenders = [str(p.relative_to(ROOT)) for p in files if chr(0x2014) in p.read_text(encoding="utf-8")]

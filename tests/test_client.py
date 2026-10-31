@@ -384,3 +384,37 @@ class NoRedirectTest(unittest.TestCase):
             client._get("/anything")
         self.assertIn("302", str(ctx.exception))
         self.assertEqual(seen, [])
+
+
+class DeliverySummaryTest(unittest.TestCase):
+    def test_slots_keep_only_available_ones_soonest_first_and_respect_the_limit(self):
+        from picnic_mcp.client import summarize_slots
+
+        payload = {
+            "delivery_slots": [
+                {"slot_id": "c", "window_start": "2026-11-03T10:00", "window_end": "2026-11-03T11:00", "cut_off_time": "x", "is_available": True},
+                {"slot_id": "a", "window_start": "2026-11-01T10:00", "window_end": "2026-11-01T11:00", "cut_off_time": "y", "is_available": True},
+                {"slot_id": "full", "window_start": "2026-11-01T08:00", "window_end": "z", "cut_off_time": "y", "is_available": False},
+                {"slot_id": "b", "window_start": "2026-11-02T10:00", "window_end": "2026-11-02T11:00", "cut_off_time": "y", "is_available": True},
+            ],
+            "selected_slot": {"slot_id": "b", "state": "IMPLICIT"},
+        }
+        out = summarize_slots(payload, limit=2)
+        self.assertEqual([s["slot_id"] for s in out], ["a", "b"])
+        self.assertTrue(out[1]["selected"])
+        self.assertEqual(summarize_slots({}), [])
+        self.assertEqual(summarize_slots([]), [])
+
+    def test_deliveries_are_newest_first_with_summed_totals_and_no_internal_ids(self):
+        from picnic_mcp.client import summarize_deliveries
+
+        payload = [
+            {"delivery_id": "old", "creation_time": "2026-01-01T10:00", "status": "COMPLETED", "delivery_time": {"start": "s1", "end": "e1"}, "orders": [{"total_price": 1000}], "slot": {"hub_id": "X"}},
+            {"delivery_id": "new", "creation_time": "2026-05-01T10:00", "status": "COMPLETED", "eta2": {"start": "s2", "end": "e2"}, "orders": [{"total_price": 700}, {"total_price": 86}, {"total_price": None}]},
+        ]
+        out = summarize_deliveries(payload, limit=5)
+        self.assertEqual([d["delivery_id"] for d in out], ["new", "old"])
+        self.assertEqual(out[0]["total_cents"], 786)
+        self.assertEqual(out[0]["delivered_from"], "s2")
+        self.assertNotIn("slot", out[1])
+        self.assertEqual(summarize_deliveries({"error": 1}), [])

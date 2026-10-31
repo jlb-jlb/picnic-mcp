@@ -258,6 +258,49 @@ def flatten_search(payload, limit: int = 10):
     return out
 
 
+def summarize_slots(payload, limit: int = 10):
+    """Bookable delivery windows, soonest first. The raw list holds weeks of slots with internal ids."""
+    slots = payload.get("delivery_slots") if isinstance(payload, dict) else None
+    chosen = payload.get("selected_slot", {}).get("slot_id") if isinstance(payload, dict) and isinstance(payload.get("selected_slot"), dict) else None
+    out = []
+    for slot in slots or []:
+        if not isinstance(slot, dict) or not slot.get("is_available"):
+            continue
+        out.append(
+            {
+                "slot_id": slot.get("slot_id"),
+                "from": slot.get("window_start"),
+                "to": slot.get("window_end"),
+                "order_by": slot.get("cut_off_time"),
+                "selected": bool(slot.get("selected")) or slot.get("slot_id") == chosen,
+            }
+        )
+    out.sort(key=lambda s: s["from"] or "")
+    return out[:limit]
+
+
+def summarize_deliveries(payload, limit: int = 10):
+    """Recent deliveries, newest first, with date, status and what was paid. Product lines are not part of this endpoint."""
+    out = []
+    for delivery in payload if isinstance(payload, list) else []:
+        if not isinstance(delivery, dict):
+            continue
+        window = delivery.get("delivery_time") or delivery.get("eta2") or {}
+        orders = [o for o in delivery.get("orders") or [] if isinstance(o, dict)]
+        out.append(
+            {
+                "delivery_id": delivery.get("delivery_id"),
+                "ordered": delivery.get("creation_time"),
+                "delivered_from": window.get("start") if isinstance(window, dict) else None,
+                "delivered_to": window.get("end") if isinstance(window, dict) else None,
+                "status": delivery.get("status"),
+                "total_cents": sum(o.get("total_price") or 0 for o in orders if isinstance(o.get("total_price"), int)),
+            }
+        )
+    out.sort(key=lambda d: d["ordered"] or "", reverse=True)
+    return out[:limit]
+
+
 _RECIPE_LINK = re.compile(r"selling_group_id=([0-9a-f]{24,32})")
 _COLOUR_MARKUP = re.compile(r"#\([^)]*\)")
 _DURATION = re.compile(r"\d.*(Minute|Stunde|Min\.|Std)")

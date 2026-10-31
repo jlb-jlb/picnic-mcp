@@ -140,7 +140,15 @@ def _sort_key(preference, has_need):
     return lambda o: (price(o), base(o))
 
 
-def find(products, query, preference="cheapest", amount=None, exclude=(), limit=4):
+# Working numbers used for ranking that the model does not need to see.
+_INTERNAL = ("pack_amount", "pack_unit", "base_price_cents")
+
+
+def _public(option):
+    return {k: v for k, v in option.items() if k not in _INTERNAL}
+
+
+def find(products, query, preference="cheapest", amount=None, exclude=(), limit=3):
     """Pick the best product for one ingredient.
 
     products is the flattened search result for the query. A product is relevant when every word of
@@ -179,6 +187,7 @@ def find(products, query, preference="cheapest", amount=None, exclude=(), limit=
         elif options:
             notes.append(f"pack sizes are not given in {need[1]}, so the amount could not be turned into packs")
     ranked = sorted(options, key=_sort_key(preference, bool(need) and any("total_cents" in o for o in options)))
+    ranked = [_public(o) for o in ranked]
     return {
         "query": query,
         "preference": preference,

@@ -77,8 +77,8 @@ The server talks to one place: the Picnic API at `storefront-prod.<country>.picn
 | `remove_recipe_from_cart` | Take a recipe's ingredients out of the cart again. |
 | `create_recipe` | Save your own recipe in the Picnic app ("Eigenes Rezept") from a name, portions and ingredient product ids. Does not touch the cart. |
 | `delete_recipe` | Delete a recipe you created with `create_recipe`. |
-| `get_delivery_slots` | List delivery slots for the current cart. |
-| `get_order_history` | List completed deliveries, to learn what you usually buy. |
+| `get_delivery_slots` | List bookable delivery windows for the current cart, soonest first. Does not book one. |
+| `get_order_history` | List recent completed deliveries with date, delivery window and total paid. It does not include the products. |
 
 Every tool declares a title and the read-only, destructive, idempotent and open-world hints, so clients can ask before anything that removes data.
 
@@ -89,7 +89,7 @@ There is no checkout tool on purpose. The server fills the cart and you confirm 
 - "Log in to Picnic, then find the cheapest products for 400 g spaghetti, 600 g carrots and 3 eggs, and show me the total before adding anything."
 - "Search Picnic for a vegan lentil recipe under 30 minutes, show me the nutrition per portion, and add it for two people."
 - "I want organic vegetables and the cheapest pasta. Build a cart for these five ingredients."
-- "Look at my past orders and suggest a healthy dinner I can add to the cart."
+- "Search Picnic for a healthy dinner that takes less than 30 minutes and add it to the cart for two."
 
 ## Good to know
 
@@ -129,7 +129,7 @@ Layout:
 ## Ideas for later
 
 - Nutrition lookup via Open Food Facts for healthy meal planning.
-- A `plan_week` MCP prompt that turns dietary goals and past orders into a cart.
+- A `plan_week` MCP prompt that turns dietary goals and preferences into a cart.
 
 ## License
 

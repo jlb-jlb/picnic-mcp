@@ -13,6 +13,7 @@ import json
 import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 from . import finder, weblogin
 from .icon import ICON_PNG_BASE64
@@ -24,6 +25,8 @@ from .client import (
     PicnicError,
     flatten_recipe_search,
     flatten_search,
+    summarize_deliveries,
+    summarize_slots,
     parse_recipe,
     summarize_cart,
 )
@@ -100,12 +103,19 @@ def tool_clear_cart(args):
     return summarize_cart(get_client().clear_cart())
 
 
+def _limit(args, default, maximum):
+    limit = args.get("limit", default)
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= maximum:
+        raise ValueError(f"limit must be an integer from 1 to {maximum}")
+    return limit
+
+
 def tool_get_delivery_slots(args):
-    return get_client().get_delivery_slots()
+    return summarize_slots(get_client().get_delivery_slots(), _limit(args, 10, 40))
 
 
 def tool_get_order_history(args):
-    return get_client().get_deliveries(["COMPLETED"])
+    return summarize_deliveries(get_client().get_deliveries(["COMPLETED"]), _limit(args, 10, 50))
 
 
 def tool_start_login(args):
@@ -149,16 +159,20 @@ def tool_find_ingredients(args):
     default = args.get("preference", "cheapest")
     if default not in finder.PREFERENCES:
         raise ValueError(f"preference must be one of {', '.join(finder.PREFERENCES)}")
-    results = []
-    for item in items:
+    get_client()  # create the client once before the worker threads share it
+
+    def one(item):
         try:
-            results.append(_finder_item(item, default))
+            return _finder_item(item, default)
         except PicnicAuthError:
             raise
         except (ValueError, PicnicError) as exc:
             # One bad ingredient should not hide the others.
-            results.append({"query": item.get("query") if isinstance(item, dict) else None, "error": str(exc)})
-    return results
+            return {"query": item.get("query") if isinstance(item, dict) else None, "error": str(exc)}
+
+    # Each ingredient is a separate search request, so run a few at a time. map keeps the input order.
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        return list(pool.map(one, items))
 
 
 MAX_INGREDIENTS = 40
@@ -412,8 +426,18 @@ TOOLS = {
         },
         tool_delete_recipe,
     ),
-    "get_delivery_slots": ("List the available delivery slots for the current cart.", {"type": "object", "properties": {}}, tool_get_delivery_slots),
-    "get_order_history": ("List completed deliveries, useful for learning which products the user usually buys.", {"type": "object", "properties": {}}, tool_get_order_history),
+    "get_delivery_slots": (
+        "List bookable delivery windows for the current cart, soonest first, with the time to order by. "
+        "The tool only reads the slots, it does not book one.",
+        {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 40, "default": 10}}},
+        tool_get_delivery_slots,
+    ),
+    "get_order_history": (
+        "List the user's recent completed deliveries, newest first, with order time, delivery window and total "
+        "paid in cents. It does not list the products in each order.",
+        {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10}}},
+        tool_get_order_history,
+    ),
 }
 
 

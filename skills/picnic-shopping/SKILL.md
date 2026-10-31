@@ -30,4 +30,4 @@ This skill describes how to use the Picnic tools in this plugin. Everything here
 
 ## Healthy meal planning
 
-`get_recipe` returns energy, fat, carbohydrates, sugar, protein, salt and fibre per portion for Picnic recipes. Use those numbers when comparing meals, name the source, and treat them as estimates. Do not give medical advice. `get_order_history` shows what the user usually buys and can guide suggestions.
+`get_recipe` returns energy, fat, carbohydrates, sugar, protein, salt and fibre per portion for Picnic recipes. Use those numbers when comparing meals, name the source, and treat them as estimates. Do not give medical advice. `get_order_history` shows past orders with date and total only, so it cannot tell what the user usually buys.

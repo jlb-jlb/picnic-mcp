@@ -1,3 +1,5 @@
+![Picnic MCP: search groceries, manage recipes, plan healthy meals](assets/banner.png)
+
 # picnic-mcp
 
 An MCP server that lets Claude search Picnic groceries and fill your cart. It uses only the Python standard library, so there is nothing to install from PyPI and no third-party code to trust. The Picnic API client and the MCP stdio protocol layer are both written from scratch in this repo.

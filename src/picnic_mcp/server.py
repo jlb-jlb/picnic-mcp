@@ -15,6 +15,7 @@ import re
 import sys
 
 from . import finder
+from .icon import ICON_PNG_BASE64
 from .auth import load_token, login_main
 from .secretstore import SecretStoreError
 from .client import (
@@ -28,7 +29,13 @@ from .client import (
 )
 
 PROTOCOL_VERSION = "2025-06-18"
-SERVER_INFO = {"name": "picnic-mcp", "version": "0.1.0"}
+SERVER_INFO = {
+    "name": "picnic-mcp",
+    "title": "Picnic",
+    "version": "0.1.0",
+    # Clients that support server icons show this in the connector list.
+    "icons": [{"src": "data:image/png;base64," + ICON_PNG_BASE64, "mimeType": "image/png", "sizes": ["128x128"]}],
+}
 MAX_COUNT = 50
 
 _client = None

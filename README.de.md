@@ -88,10 +88,11 @@ Ein Werkzeug zum Abschließen der Bestellung gibt es absichtlich nicht. Der Serv
 
 ## Beispielanfragen
 
-- „Melde mich bei Picnic an, such dann die günstigsten Produkte für 400 g Spaghetti, 600 g Karotten und 3 Eier und zeig mir die Summe, bevor du etwas in den Warenkorb legst.“
-- „Suche bei Picnic ein veganes Linsenrezept unter 30 Minuten, zeig mir die Nährwerte pro Portion und leg es für zwei Personen in den Warenkorb.“
-- „Ich möchte Bio-Gemüse und die günstigste Pasta. Stell einen Warenkorb für diese fünf Zutaten zusammen.“
-- „Suche bei Picnic ein gesundes Abendessen in unter 30 Minuten und leg es für zwei Personen in den Warenkorb.“
+- „Schlage mir drei gesunde Abendessen für nächste Woche vor, die jeweils unter 30 Minuten dauern und sich Zutaten teilen. Ein Kilo Möhren oder ein Bund Koriander soll also in zwei Rezepten aufgebraucht werden. Prüfe die Nährwerte pro Portion und zeig mir dann eine gemeinsame Einkaufsliste mit den Gesamtkosten, bevor du etwas in den Warenkorb legst.“
+- „Ich koche für zwei Personen. Finde bei Picnic die besten Produkte für 400 g Spaghetti, 600 g Möhren, 3 Eier, 200 g Feta und einen Bund Petersilie. Nimm Bio beim Gemüse und das günstigste Produkt bei allem anderen, und zeig mir die Packungen, die Summe und den Rest.“
+- „Finde ein veganes Linsenrezept unter 30 Minuten mit mindestens 20 g Eiweiß pro Portion, leg es für zwei Personen in den Warenkorb und sag mir, welche Lieferfenster am Freitagabend frei sind.“
+- „Plane fünf schnelle Mittagessen, die ich sonntags für die Arbeitswoche vorkochen kann, vegetarisch und eiweißreich, mit möglichst wenigen verschiedenen Zutaten. Such bei Picnic nach Rezeptideen und zeig die Kosten pro Portion.“
+- „Speichere meine Linsensuppe als Picnic-Rezept für vier Portionen mit diesen Zutaten, damit ich sie in der App mit einem Tipp in den Warenkorb legen kann.“
 
 ## Gut zu wissen
 

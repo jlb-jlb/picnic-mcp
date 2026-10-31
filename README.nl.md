@@ -88,10 +88,11 @@ Een tool om af te rekenen is er bewust niet. De server vult het winkelmandje en 
 
 ## Voorbeeldvragen
 
-- „Log in bij Picnic, zoek dan de goedkoopste producten voor 400 g spaghetti, 600 g wortels en 3 eieren en laat me het totaal zien voordat je iets toevoegt.”
-- „Zoek bij Picnic een veganistisch linzenrecept van minder dan 30 minuten, laat de voedingswaarden per portie zien en voeg het toe voor twee personen.”
-- „Ik wil biologische groenten en de goedkoopste pasta. Maak een winkelmandje voor deze vijf ingrediënten.”
-- „Zoek bij Picnic een gezond avondeten dat in minder dan 30 minuten klaar is en voeg het toe voor twee personen.”
+- „Stel drie gezonde avondeten voor volgende week voor die elk binnen 30 minuten klaar zijn en ingrediënten delen. Een kilo wortels of een bosje koriander moet dus in twee recepten opgaan. Controleer de voedingswaarden per portie en laat me dan één gezamenlijke boodschappenlijst met de totale kosten zien voordat je iets aan het winkelmandje toevoegt.”
+- „Ik kook voor twee personen. Zoek bij Picnic de beste producten voor 400 g spaghetti, 600 g wortels, 3 eieren, 200 g feta en een bosje peterselie. Kies bio bij de groenten en het goedkoopste product bij de rest, en laat de verpakkingen, het totaal en wat er overblijft zien.”
+- „Zoek een veganistisch linzenrecept van minder dan 30 minuten met minstens 20 g eiwit per portie, voeg het toe voor twee personen en vertel me welke bezorgvensters vrijdagavond vrij zijn.”
+- „Plan vijf snelle lunches die ik zondag kan voorbereiden voor de werkweek, vegetarisch en eiwitrijk, met zo weinig mogelijk verschillende ingrediënten. Zoek bij Picnic naar receptideeën en laat de kosten per portie zien.”
+- „Sla mijn linzensoep op als Picnic-recept voor vier porties met deze ingrediënten, zodat ik het in de app met één tik aan het winkelmandje kan toevoegen.”
 
 ## Goed om te weten
 

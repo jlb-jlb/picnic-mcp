@@ -88,10 +88,11 @@ There is no checkout tool on purpose. The server fills the cart and you confirm 
 
 ## Example prompts
 
-- "Log in to Picnic, then find the cheapest products for 400 g spaghetti, 600 g carrots and 3 eggs, and show me the total before adding anything."
-- "Search Picnic for a vegan lentil recipe under 30 minutes, show me the nutrition per portion, and add it for two people."
-- "I want organic vegetables and the cheapest pasta. Build a cart for these five ingredients."
-- "Search Picnic for a healthy dinner that takes less than 30 minutes and add it to the cart for two."
+- "Suggest three healthy dinners for next week that take under 30 minutes each and share ingredients, so a 1 kg bag of carrots or a bunch of coriander is used up across two recipes. Check the nutrition per portion, then show me one combined shopping list with the total cost before you add anything to the cart."
+- "I cook for two people. Find the best Picnic products for 400 g spaghetti, 600 g carrots, 3 eggs, 200 g feta and a bunch of parsley. Choose organic for the vegetables and the cheapest option for everything else, and show me the packs, the total and what is left over."
+- "Find a vegan lentil recipe under 30 minutes with at least 20 g of protein per portion, add it to the cart for two people, and tell me which delivery slots are free on Friday evening."
+- "Plan five quick lunches I can prepare on Sunday for the work week, vegetarian and high in protein, with as few different ingredients as possible. Search Picnic's recipes for ideas and show the cost per portion."
+- "Save my lentil soup as a Picnic recipe for four portions with these ingredients, so I can add it to the cart with one tap in the app."
 
 ## Good to know
 

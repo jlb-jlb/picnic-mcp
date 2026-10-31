@@ -88,10 +88,11 @@ Il n'y a volontairement pas d'outil pour valider la commande. Le serveur remplit
 
 ## Exemples de demandes
 
-- « Connecte-toi à Picnic, trouve ensuite les produits les moins chers pour 400 g de spaghettis, 600 g de carottes et 3 œufs et montre-moi le total avant d'ajouter quoi que ce soit. »
-- « Cherche chez Picnic une recette végane aux lentilles de moins de 30 minutes, montre-moi les valeurs nutritionnelles par portion et ajoute-la pour deux personnes. »
-- « Je veux des légumes bio et les pâtes les moins chères. Compose un panier pour ces cinq ingrédients. »
-- « Cherche chez Picnic un dîner sain prêt en moins de 30 minutes et ajoute-le pour deux personnes. »
+- « Propose-moi trois dîners sains pour la semaine prochaine, prêts en moins de 30 minutes et qui partagent des ingrédients. Un kilo de carottes ou une botte de coriandre doit donc être utilisé dans deux recettes. Vérifie les valeurs nutritionnelles par portion, puis montre-moi une liste de courses commune avec le coût total avant d'ajouter quoi que ce soit au panier. »
+- « Je cuisine pour deux personnes. Trouve chez Picnic les meilleurs produits pour 400 g de spaghettis, 600 g de carottes, 3 œufs, 200 g de feta et une botte de persil. Prends du bio pour les légumes et le moins cher pour le reste, et montre-moi les conditionnements, le total et ce qui reste. »
+- « Trouve une recette végane aux lentilles de moins de 30 minutes avec au moins 20 g de protéines par portion, ajoute-la au panier pour deux personnes et dis-moi quels créneaux de livraison sont libres vendredi soir. »
+- « Planifie cinq déjeuners rapides que je peux préparer le dimanche pour la semaine de travail, végétariens et riches en protéines, avec le moins d'ingrédients différents possible. Cherche des idées de recettes chez Picnic et montre le coût par portion. »
+- « Enregistre ma soupe de lentilles comme recette Picnic pour quatre portions avec ces ingrédients, afin que je puisse l'ajouter au panier d'un seul geste dans l'application. »
 
 ## Bon à savoir
 

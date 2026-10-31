@@ -33,7 +33,7 @@ There is no checkout tool on purpose. The server fills the cart and you confirm 
 
 Requires [uv](https://docs.astral.sh/uv/). Python 3.14 is pinned in `.python-version` and uv fetches it automatically.
 
-Log in once in a terminal. It asks for the password with hidden input, has Picnic send a code by SMS or e-mail, and stores the session token in `%LOCALAPPDATA%\picnic-mcp\token-<country>.json` (override with `PICNIC_TOKEN_FILE`). The server uses only that token and never sees the password. Treat the file like a password. Log in again if it stops working.
+Log in once in a terminal. It asks for the password with hidden input, has Picnic send a code by SMS or e-mail, and stores the session token in the operating system's own credential store: Windows Credential Manager, macOS Keychain, or the Linux desktop keyring (needs `secret-tool` from libsecret and a running keyring). There is no file fallback, so on a system without a keyring the login fails with a message that says what to install. The server uses only that token and never sees the password. An older plain token file is moved into the store on first use and deleted. Log in again if the token stops working.
 
 ```bash
 uv run --directory C:\Users\josch\Projects\picnic-mcp picnic-mcp login

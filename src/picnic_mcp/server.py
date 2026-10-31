@@ -16,6 +16,7 @@ import sys
 
 from . import finder
 from .auth import load_token, login_main
+from .secretstore import SecretStoreError
 from .client import (
     PicnicAuthError,
     PicnicClient,
@@ -38,7 +39,10 @@ def get_client() -> PicnicClient:
     global _client
     if _client is None:
         country = os.environ.get("PICNIC_COUNTRY", "nl")
-        token = load_token(country)
+        try:
+            token = load_token(country)
+        except SecretStoreError as exc:
+            raise PicnicAuthError(str(exc)) from exc
         if token:
             _client = PicnicClient(country=country, token=token)
             return _client

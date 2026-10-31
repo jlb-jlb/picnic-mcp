@@ -237,7 +237,7 @@ class ToolTests(unittest.TestCase):
 
 class AuthTests(unittest.TestCase):
     def test_missing_session_points_to_the_login_command(self):
-        env = {"PICNIC_TOKEN_FILE": "does-not-exist.json"}
+        env = {}
         with mock.patch.object(server, "_client", None), mock.patch.dict("os.environ", env, clear=True):
             r = call("get_cart", {})
         self.assertTrue(r["result"]["isError"])

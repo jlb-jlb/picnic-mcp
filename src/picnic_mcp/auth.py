@@ -4,7 +4,7 @@ Run `picnic-mcp login` once in a terminal. It asks for the password with getpass
 (so it never lands in shell history or the environment), has Picnic send a
 one-time code, verifies it, and stores the session token. The MCP server then
 reuses that token and never needs the password. The token is a bearer secret,
-so it is written to a per-user file and never printed.
+so it goes into the operating system's credential store (see secretstore.py) and is never printed.
 """
 
 import getpass
@@ -13,35 +13,57 @@ import os
 import sys
 from pathlib import Path
 
+from . import secretstore
 from .client import PicnicClient, PicnicError
 
 
-def token_path(country: str) -> Path:
-    override = os.environ.get("PICNIC_TOKEN_FILE")
-    if override:
-        return Path(override)
+SERVICE = "picnic-mcp"
+
+
+def get_store():
+    return secretstore.default_store()
+
+
+def _account(country: str) -> str:
+    return f"token-{country.lower()}"
+
+
+def legacy_token_path(country: str) -> Path:
+    """Where earlier versions kept the token as a plain file. Read once to migrate, then deleted."""
     base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), ".local", "state")
     return Path(base) / "picnic-mcp" / f"token-{country.lower()}.json"
 
 
-def load_token(country: str) -> str | None:
+def _migrate_legacy(country: str, store) -> str | None:
+    path = legacy_token_path(country)
     try:
-        data = json.loads(token_path(country).read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     token = data.get("token") if isinstance(data, dict) else None
-    return token if isinstance(token, str) and token else None
-
-
-def save_token(country: str, token: str) -> Path:
-    path = token_path(country)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"token": token}), encoding="utf-8")
+    if not isinstance(token, str) or not token:
+        return None
+    store.set(SERVICE, _account(country), token)
     try:
-        path.chmod(0o600)  # owner-only where the platform supports it
+        path.unlink()
     except OSError:
         pass
-    return path
+    return token
+
+
+def load_token(country: str) -> str | None:
+    """The stored session token, or None. Raises SecretStoreError when no secure store is available."""
+    store = get_store()
+    token = store.get(SERVICE, _account(country))
+    return token or _migrate_legacy(country, store)
+
+
+def save_token(country: str, token: str) -> None:
+    get_store().set(SERVICE, _account(country), token)
+
+
+def forget_token(country: str) -> None:
+    get_store().delete(SERVICE, _account(country))
 
 
 def login_main(argv=None, client_factory=PicnicClient, ask=input, ask_secret=getpass.getpass) -> int:
@@ -57,6 +79,10 @@ def login_main(argv=None, client_factory=PicnicClient, ask=input, ask_secret=get
     except (PicnicError, ValueError) as e:
         print(f"login failed: {e}", file=sys.stderr)
         return 1
-    path = save_token(country, client.token)
-    print(f"logged in, session token stored in {path}", file=sys.stderr)
+    try:
+        save_token(country, client.token)
+    except secretstore.SecretStoreError as e:
+        print(f"login worked, but the token could not be stored: {e}", file=sys.stderr)
+        return 1
+    print("logged in, session token stored in the system credential store", file=sys.stderr)
     return 0

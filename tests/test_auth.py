@@ -6,6 +6,7 @@ from unittest import mock
 
 from picnic_mcp import auth
 from picnic_mcp.client import PicnicClient, PicnicError
+from picnic_mcp.secretstore import SecretStoreError
 from test_client import FakeOpener, FakeResponse
 
 
@@ -30,30 +31,66 @@ class TwoFactorClientTests(unittest.TestCase):
         self.assertEqual(op.requests[0].get_header("X-picnic-auth"), "saved")
 
 
-class TokenStoreTests(unittest.TestCase):
+class FakeStore:
+    def __init__(self):
+        self.items = {}
+
+    def get(self, service, account):
+        return self.items.get((service, account))
+
+    def set(self, service, account, value):
+        self.items[(service, account)] = value
+
+    def delete(self, service, account):
+        self.items.pop((service, account), None)
+
+
+class StoreTestCase(unittest.TestCase):
     def setUp(self):
+        self.store = FakeStore()
         self.dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.dir.cleanup)
-        self.path = os.path.join(self.dir.name, "sub", "token.json")
-        patcher = mock.patch.dict(os.environ, {"PICNIC_TOKEN_FILE": self.path})
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        env = {"LOCALAPPDATA": self.dir.name, "PICNIC_COUNTRY": "de", "PICNIC_USER": "", "PICNIC_PASSWORD": ""}
+        for patcher in (mock.patch.object(auth, "get_store", return_value=self.store), mock.patch.dict(os.environ, env)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
+
+class TokenStoreTests(StoreTestCase):
     def test_save_then_load_roundtrip(self):
         auth.save_token("de", "abc")
         self.assertEqual(auth.load_token("de"), "abc")
 
-    def test_missing_or_broken_file_means_no_token(self):
-        self.assertIsNone(auth.load_token("de"))
+    def test_tokens_are_kept_per_country(self):
         auth.save_token("de", "abc")
-        with open(self.path, "w") as f:
-            f.write("not json")
+        self.assertIsNone(auth.load_token("nl"))
+
+    def test_forget_removes_the_token(self):
+        auth.save_token("de", "abc")
+        auth.forget_token("de")
         self.assertIsNone(auth.load_token("de"))
 
-    def test_default_path_is_per_country(self):
-        with mock.patch.dict(os.environ, {"LOCALAPPDATA": "base"}):
-            os.environ.pop("PICNIC_TOKEN_FILE")
-            self.assertNotEqual(auth.token_path("de"), auth.token_path("nl"))
+    def test_nothing_stored_means_no_token(self):
+        self.assertIsNone(auth.load_token("de"))
+
+    def test_a_missing_store_is_reported_not_swallowed(self):
+        with mock.patch.object(auth, "get_store", side_effect=SecretStoreError("no keyring")):
+            with self.assertRaises(SecretStoreError):
+                auth.load_token("de")
+
+    def test_an_old_token_file_moves_into_the_store_and_is_deleted(self):
+        legacy = auth.legacy_token_path("de")
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text(json.dumps({"token": "old"}), encoding="utf-8")
+        self.assertEqual(auth.load_token("de"), "old")
+        self.assertFalse(legacy.exists())
+        self.assertEqual(self.store.get("picnic-mcp", "token-de"), "old")
+
+    def test_a_broken_old_file_is_ignored(self):
+        legacy = auth.legacy_token_path("de")
+        legacy.parent.mkdir(parents=True)
+        legacy.write_text("not json", encoding="utf-8")
+        self.assertIsNone(auth.load_token("de"))
 
 
 class FakeLoginClient:
@@ -77,19 +114,7 @@ class FakeLoginClient:
         self._step(f"verify:{code}")
 
 
-class LoginCommandTests(unittest.TestCase):
-    def setUp(self):
-        self.dir = tempfile.TemporaryDirectory()
-        self.addCleanup(self.dir.cleanup)
-        path = os.path.join(self.dir.name, "token.json")
-        patcher = mock.patch.dict(
-            os.environ,
-            {"PICNIC_TOKEN_FILE": path, "PICNIC_COUNTRY": "de", "PICNIC_USER": "", "PICNIC_PASSWORD": ""},
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        self.path = path
-
+class LoginCommandTests(StoreTestCase):
     def run_login(self, answers, **kw):
         made = []
 
@@ -111,6 +136,11 @@ class LoginCommandTests(unittest.TestCase):
         code, _ = self.run_login(["me@x.de", "email", "1"], fail_at="verify:1")
         self.assertEqual(code, 1)
         self.assertIsNone(auth.load_token("de"))
+
+    def test_an_unavailable_store_fails_the_login_with_the_reason(self):
+        with mock.patch.object(auth, "save_token", side_effect=SecretStoreError("no keyring")):
+            code, _ = self.run_login(["me@x.de", "", "1"])
+        self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

@@ -42,6 +42,13 @@ def _safe_headers(headers) -> dict:
     return {k.lower(): v for k, v in headers.items() if k.lower() not in _HIDDEN_HEADERS}
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect. urllib would resend the auth header to wherever it points."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class PicnicClient:
     def __init__(self, country: str = "nl", timeout: float = 20.0, opener=None, token: str | None = None):
         country = country.lower()
@@ -53,7 +60,7 @@ class PicnicClient:
         # Random per-instance device id, sent as the app's x-picnic-did header.
         self._device_id = secrets.token_hex(8).upper()
         # Injectable so tests can replace the network layer.
-        self._open = opener or urllib.request.build_opener().open
+        self._open = opener or urllib.request.build_opener(_NoRedirect).open
 
     @property
     def authenticated(self) -> bool:

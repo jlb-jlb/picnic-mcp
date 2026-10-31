@@ -341,3 +341,46 @@ class HelperTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NoRedirectTest(unittest.TestCase):
+    """A redirect must never carry the session token to another host."""
+
+    def test_a_redirect_is_an_error_and_is_not_followed(self):
+        import http.server
+        import threading
+        import urllib.request
+
+        seen = []
+
+        class Target(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen.append(self.headers.get("x-picnic-auth"))
+                self.send_response(200)
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        target = http.server.HTTPServer(("127.0.0.1", 0), Target)
+
+        class Redirector(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header("Location", f"http://127.0.0.1:{target.server_address[1]}/x")
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        redirector = http.server.HTTPServer(("127.0.0.1", 0), Redirector)
+        for srv in (target, redirector):
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            self.addCleanup(srv.server_close)
+            self.addCleanup(srv.shutdown)
+        client = PicnicClient(token="secret-token")
+        client._base = f"http://127.0.0.1:{redirector.server_address[1]}"
+        with self.assertRaises(PicnicError) as ctx:
+            client._get("/anything")
+        self.assertIn("302", str(ctx.exception))
+        self.assertEqual(seen, [])

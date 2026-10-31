@@ -417,6 +417,45 @@ TOOLS = {
 }
 
 
+# (title, read only, destructive, idempotent). Every tool talks to Picnic, so open world is always true.
+# Destructive means the call removes or deletes something. Adding to the cart is not destructive.
+_ANNOTATIONS = {
+    "search_products": ("Search products", True, False, True),
+    "find_ingredients": ("Find the best product per ingredient", True, False, True),
+    "start_login": ("Sign in to Picnic", False, False, False),
+    "get_cart": ("Show the cart", True, False, True),
+    "add_to_cart": ("Add a product to the cart", False, False, False),
+    "remove_from_cart": ("Remove a product from the cart", False, True, False),
+    "clear_cart": ("Empty the cart", False, True, True),
+    "search_recipes": ("Search recipes", True, False, True),
+    "get_recipe": ("Show a recipe", True, False, True),
+    "add_recipe_to_cart": ("Add a recipe to the cart", False, False, False),
+    "remove_recipe_from_cart": ("Remove a recipe from the cart", False, True, True),
+    "create_recipe": ("Save your own recipe", False, False, False),
+    "delete_recipe": ("Delete your own recipe", False, True, True),
+    "get_delivery_slots": ("Show delivery slots", True, False, True),
+    "get_order_history": ("Show past orders", True, False, True),
+}
+assert set(_ANNOTATIONS) == set(TOOLS), "every tool needs annotations"
+
+
+def _tool_listing():
+    listing = []
+    for name, (description, schema, _) in TOOLS.items():
+        title, read_only, destructive, idempotent = _ANNOTATIONS[name]
+        annotations = {
+            "title": title,
+            "readOnlyHint": read_only,
+            "destructiveHint": destructive,
+            "idempotentHint": idempotent,
+            "openWorldHint": True,
+        }
+        listing.append(
+            {"name": name, "title": title, "description": description, "inputSchema": schema, "annotations": annotations}
+        )
+    return listing
+
+
 def _ok(msg_id, result):
     return {"jsonrpc": "2.0", "id": msg_id, "result": result}
 
@@ -461,8 +500,7 @@ def handle(msg):
     if method == "ping":
         return _ok(msg_id, {})
     if method == "tools/list":
-        tools = [{"name": n, "description": d, "inputSchema": s} for n, (d, s, _) in TOOLS.items()]
-        return _ok(msg_id, {"tools": tools})
+        return _ok(msg_id, {"tools": _tool_listing()})
     if method == "tools/call":
         result = _call_tool(params if isinstance(params, dict) else {})
         if result is None:

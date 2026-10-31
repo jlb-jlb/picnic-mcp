@@ -100,6 +100,24 @@ class ProtocolTests(unittest.TestCase):
         for t in tools:
             self.assertEqual(t["inputSchema"]["type"], "object")
 
+    def test_every_tool_has_a_title_and_complete_annotations(self):
+        for t in rpc("tools/list")["result"]["tools"]:
+            self.assertLessEqual(len(t["name"]), 64)
+            self.assertTrue(t["title"])
+            a = t["annotations"]
+            self.assertEqual(a["title"], t["title"])
+            for key in ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"):
+                self.assertIsInstance(a[key], bool, f"{t['name']} {key}")
+            self.assertFalse(a["readOnlyHint"] and a["destructiveHint"], t["name"])
+
+    def test_tools_that_remove_things_are_marked_destructive_and_reads_are_read_only(self):
+        by_name = {t["name"]: t["annotations"] for t in rpc("tools/list")["result"]["tools"]}
+        for name in ("clear_cart", "remove_from_cart", "delete_recipe", "remove_recipe_from_cart"):
+            self.assertTrue(by_name[name]["destructiveHint"], name)
+        for name in ("search_products", "find_ingredients", "get_cart", "get_recipe", "search_recipes"):
+            self.assertTrue(by_name[name]["readOnlyHint"], name)
+        self.assertFalse(by_name["add_to_cart"]["destructiveHint"])
+
     def test_invalid_request_and_parse_error(self):
         self.assertEqual(server.handle([])["error"]["code"], -32600)
         out = io.StringIO()
